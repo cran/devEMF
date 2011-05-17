@@ -1,2 +1,1 @@
-PKG_CXXFLAGS = -I.
 PKG_LIBS = -lRzlib

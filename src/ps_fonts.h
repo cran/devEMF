@@ -1,7 +1,8 @@
 /*
  * Code in the file is extracted verbatim from devPS.c from R-2.12.1
  * for dealing with font metrics.  Only additions are a few #defines
- * at the very beginning of the file.
+ * at the very beginning of the file.  Only changes are replacing all
+ * occurences of "(_(" with "((".
  *
  *  R : A Computer Language for Statistical Data Analysis
  *  Copyright (C) 1995, 1996  Robert Gentleman and Ross Ihaka
@@ -23,12 +24,12 @@
  *  http://www.r-project.org/Licenses/
  */
 
-//Defines/declarations copied from Defn.h
+//Added defines/declarations copied from Defn.h
 #define streql(s, t)	(!strcmp((s), (t)))
 # define FILESEP     "/"
 LibExtern char *R_Home;             /* Root of the R tree */
 //end of copied defines
-//Defines to substitute for missing functions
+//Added defines to substitute for missing functions
 #define R_fopen fopen
 #define warning Rf_warning
 #define error Rf_error

@@ -33,8 +33,8 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   is the purpose of this device.
 
   The EMF specification does not allow for multiple pages; attempting to
-  create multiple pages will result in a warning message and an output
-  file that contains the different pages superimposed.
+  create multiple pages will result in a warning message and the output
+  file will contain the different pages superimposed.
   
   Also, EMF does not allow for embedding fonts.  Thus you must be
   careful that your desired font is present both on the system that you
@@ -50,16 +50,11 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   EMF-level clipping is not yet implemented, since R \emph{appears} to
   take care of this; however, if you see a problem that could be the
   result a clipping bug, please contact the author.
-
-  Finally, as currently written, devEMF only works on little-endian
-  processors.
 }
 \note{
-  This package includes header files from the Wine Project
-  (http://www.winehq.org), which are distributed under the GNU Lessor
-  General Public License.  This package also copies the postscript font
-  metric code from the R core grDevices library and uses the AFM files
-  installed with that library.
+  This package copies the postscript font metric code from the R core
+  grDevices library and uses the AFM files installed with that library.
+  Thanks to the R core development team for writing this code.
 }
 \author{
   Philip Johnson

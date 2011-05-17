@@ -18,7 +18,7 @@ emf <- function(file = "Rplot.emf", width=7, height=7,
                 family = "Helvetica", custom.lty=FALSE)
 {
   ps.options() #initialize fonts for retrieving metric information
-  .External('EMF', PACKAGE='devEMF', file, bg, fg, width, height, pointsize,
+  .External('devEMF', PACKAGE='devEMF', file, bg, fg, width, height, pointsize,
             family, custom.lty)
   invisible()
 }
