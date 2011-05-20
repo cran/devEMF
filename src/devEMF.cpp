@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 174 2011-05-17 13:47:07Z pjohnson $
+/* $Id: devEMF.cpp 175 2011-05-20 15:49:32Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -67,107 +67,30 @@ public:
         return font;
     }
 
-    // R callbacks
-    static void Activate(pDevDesc) {}
-    static void Deactivate(pDevDesc) {}
-    static void Mode(int, pDevDesc) {}
-    static Rboolean Locator(double*, double*, pDevDesc) {return FALSE;}
-    static void Raster(unsigned int*, int, int, double, double, double,
-                       double, double, Rboolean, const pGEcontext, pDevDesc) {
-        Rf_warning("Raster rending not yet implemented for EMF");
-    }
-    static SEXP Cap(pDevDesc) {
-        Rf_warning("Raster capture not available for this EMF");
-        return R_NilValue;
-    }
-    static void Path(double*, double*, int, int*, Rboolean, const pGEcontext,
-                     pDevDesc) {
-        Rf_warning("Path rending not yet implemented for EMF.");
-    }
-
+    // Member-function R callbacks (see below class definition for
+    // extern "C" versions
     bool Open(const char* filename, int width, int height);
     void Close(void);
-    static void Close(pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Close();
-	delete static_cast<CDevEMF*>(dd->deviceSpecific);
-    }
     void NewPage(const pGEcontext gc);
-    static void NewPage(const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->NewPage(gc);
-    }
-
     void MetricInfo(int c, const pGEcontext gc, double* ascent,
                     double* descent, double* width);
-    static void MetricInfo(int c, const pGEcontext gc, double* ascent,
-                           double* descent, double* width, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->MetricInfo(c, gc, ascent,
-                                                          descent, width);
-    }
-
     double StrWidth(const char *str, const pGEcontext gc);
-    static double StrWidth(const char *str, const pGEcontext gc, pDevDesc dd) {
-	return static_cast<CDevEMF*>(dd->deviceSpecific)->StrWidth(str, gc);
-    }
-    
     void Clip(double x0, double x1, double y0, double y1);
-    static void Clip(double x0, double x1, double y0, double y1, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Clip(x0,x1,y0,y1);
-    }
-
     void Circle(double x, double y, double r, const pGEcontext gc);
-    static void Circle(double x, double y, double r, const pGEcontext gc,
-		       pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Circle(x,y,r,gc);
-    }
-
     void Line(double x1, double y1, double x2, double y2, const pGEcontext gc);
-    static void Line(double x1, double y1, double x2, double y2,
-		     const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Line(x1,y1,x2,y2,gc);
-    }
-
     void Polyline(int n, double *x, double *y, const pGEcontext gc);
-    static void Polyline(int n, double *x, double *y, 
-			 const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Polyline(n,x,y, gc);
-    }
-
-
     void TextUTF8(double x, double y, const char *str, double rot,
                   double hadj, const pGEcontext gc);
-    static void TextUTF8(double x, double y, const char *str, double rot,
-		     double hadj, const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->TextUTF8(x,y,str,rot,hadj,gc);
-    }
-    static void Text(double x, double y, const char *str, double rot,
-		     double hadj, const pGEcontext gc, pDevDesc dd) {
-        Rf_warning("Non-UTF8 text currently unsupported in devEMF.");
-    }
 
     void Rect(double x0, double y0, double x1, double y1, const pGEcontext gc);
-    static void Rect(double x0, double y0, double x1, double y1,
-                     const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Rect(x0,y0,x1,y1,gc);
-    }
-
     void Polygon(int n, double *x, double *y, const pGEcontext gc);
-    static void Polygon(int n, double *x, double *y, 
-                        const pGEcontext gc, pDevDesc dd) {
-	static_cast<CDevEMF*>(dd->deviceSpecific)->Polygon(n,x,y,gc);
-    }
 
-    static void Size(double *left, double *right, double *bottom, double *top,
-                     pDevDesc dd) {
-        *left = dd->left; *right = dd->right;
-        *bottom = dd->bottom; *top = dd->top;
-    }
-
-
-
+    // global helper functions
     static int x_Inches2Dev(double inches) { return 2540*inches;}
     static double x_EffPointsize(const pGEcontext gc) {
         return floor(gc->cex * gc->ps + 0.5);
     }
+
 private:
     static string iConvUTF8toUTF16LE(const string& s) {
         void *cd = Riconv_open("UTF-16LE", "UTF-8");
@@ -388,7 +311,80 @@ private:
     CFonts m_Fonts;     unsigned int m_CurrFont;
 };
 
+// R callbacks below (declare extern "C")
+namespace EMFcb {
+    extern "C" {
+        void Activate(pDevDesc) {}
+        void Deactivate(pDevDesc) {}
+        void Mode(int, pDevDesc) {}
+        Rboolean Locator(double*, double*, pDevDesc) {return FALSE;}
+        void Raster(unsigned int*, int, int, double, double, double,
+                    double, double, Rboolean, const pGEcontext, pDevDesc) {
+            Rf_warning("Raster rending not yet implemented for EMF");
+        }
+        SEXP Cap(pDevDesc) {
+            Rf_warning("Raster capture not available for this EMF");
+            return R_NilValue;
+        }
+        void Path(double*, double*, int, int*, Rboolean, const pGEcontext,
+                  pDevDesc) {
+            Rf_warning("Path rending not yet implemented for EMF.");
+        }
+        void Close(pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Close();
+            delete static_cast<CDevEMF*>(dd->deviceSpecific);
+        }
+        void NewPage(const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->NewPage(gc);
+        }
+        void MetricInfo(int c, const pGEcontext gc, double* ascent,
+                        double* descent, double* width, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->
+                MetricInfo(c, gc, ascent,descent, width);
+        }
+        double StrWidth(const char *str, const pGEcontext gc, pDevDesc dd) {
+            return static_cast<CDevEMF*>(dd->deviceSpecific)->StrWidth(str, gc);
+        }
+        void Clip(double x0, double x1, double y0, double y1, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Clip(x0,x1,y0,y1);
+        }
+        void Circle(double x, double y, double r, const pGEcontext gc,
+                    pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Circle(x,y,r,gc);
+        }
+        void Line(double x1, double y1, double x2, double y2,
+                  const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Line(x1,y1,x2,y2,gc);
+        }
+        void Polyline(int n, double *x, double *y, 
+                      const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Polyline(n,x,y, gc);
+        }
+        void TextUTF8(double x, double y, const char *str, double rot,
+                      double hadj, const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->
+                TextUTF8(x,y,str,rot,hadj,gc);
+        }
+        void Text(double, double, const char *, double,
+                  double, const pGEcontext, pDevDesc) {
+            Rf_warning("Non-UTF8 text currently unsupported in devEMF.");
+        }
+        void Rect(double x0, double y0, double x1, double y1,
+                  const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Rect(x0,y0,x1,y1,gc);
+        }
+        void Polygon(int n, double *x, double *y, 
+                     const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Polygon(n,x,y,gc);
+        }
 
+        void Size(double *left, double *right, double *bottom, double *top,
+                  pDevDesc dd) {
+            *left = dd->left; *right = dd->right;
+            *bottom = dd->bottom; *top = dd->top;
+        }
+    }
+} //end of R callbacks / extern "C"
 
 /* Table copied from R util.c, which got from
 http://unicode.org/Public/MAPPINGS/VENDORS/ADOBE/symbol.txt
@@ -721,28 +717,28 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     dd->startgamma = 1;
 
     /* Device callbacks */
-    dd->activate = CDevEMF::Activate;
-    dd->deactivate = CDevEMF::Deactivate;
-    dd->close = CDevEMF::Close;
-    dd->clip = CDevEMF::Clip;
-    dd->size = CDevEMF::Size;
-    dd->newPage = CDevEMF::NewPage;
-    dd->line = CDevEMF::Line;
-    dd->text = CDevEMF::Text;
-    dd->strWidth = CDevEMF::StrWidth;
-    dd->rect = CDevEMF::Rect;
-    dd->circle = CDevEMF::Circle;
-    dd->raster = CDevEMF::Raster;
-    dd->cap = CDevEMF::Cap;
-    dd->path = CDevEMF::Path;
-    dd->polygon = CDevEMF::Polygon;
-    dd->polyline = CDevEMF::Polyline;
-    dd->locator = CDevEMF::Locator;
-    dd->mode = CDevEMF::Mode;
-    dd->metricInfo = CDevEMF::MetricInfo;
+    dd->activate = EMFcb::Activate;
+    dd->deactivate = EMFcb::Deactivate;
+    dd->close = EMFcb::Close;
+    dd->clip = EMFcb::Clip;
+    dd->size = EMFcb::Size;
+    dd->newPage = EMFcb::NewPage;
+    dd->line = EMFcb::Line;
+    dd->text = EMFcb::Text;
+    dd->strWidth = EMFcb::StrWidth;
+    dd->rect = EMFcb::Rect;
+    dd->circle = EMFcb::Circle;
+    dd->raster = EMFcb::Raster;
+    dd->cap = EMFcb::Cap;
+    dd->path = EMFcb::Path;
+    dd->polygon = EMFcb::Polygon;
+    dd->polyline = EMFcb::Polyline;
+    dd->locator = EMFcb::Locator;
+    dd->mode = EMFcb::Mode;
+    dd->metricInfo = EMFcb::MetricInfo;
     dd->hasTextUTF8 = TRUE;
-    dd->textUTF8       = CDevEMF::TextUTF8;
-    dd->strWidthUTF8   = CDevEMF::StrWidth;
+    dd->textUTF8       = EMFcb::TextUTF8;
+    dd->strWidthUTF8   = EMFcb::StrWidth;
     dd->wantSymbolUTF8 = TRUE;
     dd->useRotatedTextInContour = TRUE;
     dd->canClip = FALSE;

@@ -1,4 +1,4 @@
-/* $Id: emf.h 174 2011-05-17 13:47:07Z pjohnson $
+/* $Id: emf.h 175 2011-05-20 15:49:32Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -294,7 +294,7 @@ namespace EMF {
         TUInt4 *styleEntries;
 
         class Less { public: bool operator()(const S_EXTCREATEPEN *p1,
-                                             const S_EXTCREATEPEN *p2) {
+                                             const S_EXTCREATEPEN *p2) const {
 	    int res = memcmp(&p1->elp, &p2->elp, sizeof(p1->elp));
             if (res != 0) return res < 0;
             if (p1->elp.numEntries < p2->elp.numEntries) return true;
