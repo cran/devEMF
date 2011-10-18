@@ -1,0 +1,4 @@
+v0.9-4
+  - Placed package within NAMESPACE (in prep for R-2.14.0)
+  - modified ps_fonts.h to make compatible with R-2.14.0 revised
+    handling of gzip i/o

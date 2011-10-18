@@ -63,7 +63,9 @@ public:
         int gotFont;
         type1fontfamily
             font = addFont(family, FALSE, loadedEncodings);
-        m_PostscriptFonts = addDeviceFont(font, m_PostscriptFonts, &gotFont);
+        if (font) {
+            m_PostscriptFonts = addDeviceFont(font, m_PostscriptFonts,&gotFont);
+        }
         return font;
     }
 
@@ -207,7 +209,7 @@ private:
     typedef set<SFont> CFonts;
 
     void x_SetLinetype(int lty, int lwd, int col) {
-	if (m_debug) fprintf(stderr, "lty:%i; lwd:%i\n", lty, lwd);
+	if (m_debug) Rprintf("lty:%i; lwd:%i\n", lty, lwd);
 	SPen *newPen = new SPen(lty, x_Inches2Dev(lwd/96.), col,
                                 m_UseUserLty);
 	CPens::iterator i = m_Pens.find(newPen);
@@ -227,7 +229,7 @@ private:
 	}
     }
     void x_SetFill(int col) {
-	if (m_debug) fprintf(stderr, "fill:%i\n", col);
+	if (m_debug) Rprintf("fill:%i\n", col);
 	SBrush newBrush(col);
 	CBrushes::iterator i = m_Brushes.find(newBrush);
 	if (i == m_Brushes.end()) {
@@ -247,7 +249,7 @@ private:
         if (family[0] == '\0') {
             family = m_DefaultFontFamily.c_str();
         }
-	if (m_debug) fprintf(stderr, "set font face:%i; size:%.1f; rot:%i\n", face, size, rot);
+	if (m_debug) Rprintf("set font face:%i; size:%.1f; rot:%i\n", face, size, rot);
 	SFont newFont(face, x_Inches2Dev(size/72.), rot, family);
 	CFonts::iterator i = m_Fonts.find(newFont);
 	if (i == m_Fonts.end()) {
@@ -323,7 +325,7 @@ namespace EMFcb {
             Rf_warning("Raster rending not yet implemented for EMF");
         }
         SEXP Cap(pDevDesc) {
-            Rf_warning("Raster capture not available for this EMF");
+            Rf_warning("Raster capture not available for EMF");
             return R_NilValue;
         }
         void Path(double*, double*, int, int*, Rboolean, const pGEcontext,
@@ -425,7 +427,7 @@ static int symbol2unicode[224] = {
 void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
                      double* descent, double* width)
 {
-    if (m_debug) fprintf(stderr, "metricinfo\n");
+    if (m_debug) Rprintf("metricinfo\n");
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
     if (!m_PostscriptFonts) { //no metrics available
         *ascent = 0;
@@ -468,7 +470,7 @@ void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
 
 
 double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
-    if (m_debug) fprintf(stderr, "strwidth\n");
+    if (m_debug) Rprintf("strwidth\n");
     int face = gc->fontface;
     if(face < 1 || face > 5) face = 1;
 
@@ -537,7 +539,7 @@ void CDevEMF::x_CreateRcdHeader(void) {
 
 bool CDevEMF::Open(const char* filename, int width, int height)
 {
-    if (m_debug) fprintf(stderr, "open: %i, %i\n", width, height);
+    if (m_debug) Rprintf("open: %i, %i\n", width, height);
     m_Width = width;
     m_Height = height;
     
@@ -562,14 +564,14 @@ void CDevEMF::NewPage(const pGEcontext gc) {
 
 void CDevEMF::Clip(double x0, double x1, double y0, double y1)
 {
-    if (m_debug) fprintf(stderr, "clip\n");
+    if (m_debug) Rprintf("clip\n");
     return;
 }
 
 
 void CDevEMF::Close(void)
 {
-    if (m_debug) fprintf(stderr, "close\n");
+    if (m_debug) Rprintf("close\n");
     
     { //EOF record
         EMF::S_EOF emr;
@@ -598,7 +600,7 @@ void CDevEMF::Close(void)
 void CDevEMF::Line(double x1, double y1, double x2, double y2,
 	       const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "line\n");
+    if (m_debug) Rprintf("line\n");
 
     if (x1 != x2  ||  y1 != y2) {
 	x_SetLinetype(gc->lty, gc->lwd, gc->col);
@@ -611,7 +613,7 @@ void CDevEMF::Line(double x1, double y1, double x2, double y2,
 
 void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "polyline\n");
+    if (m_debug) Rprintf("polyline\n");
     x_SetLinetype(gc->lty, gc->lwd, gc->col);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
@@ -621,7 +623,7 @@ void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
 
 void CDevEMF::Rect(double x0, double y0, double x1, double y1, const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "rect\n");
+    if (m_debug) Rprintf("rect\n");
     x_SetLinetype(gc->lty, gc->lwd, gc->col);
     x_SetFill(gc->fill);
 
@@ -635,7 +637,7 @@ void CDevEMF::Rect(double x0, double y0, double x1, double y1, const pGEcontext 
 
 void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "circle\n");
+    if (m_debug) Rprintf("circle\n");
 
     x_SetLinetype(gc->lty, gc->lwd, gc->col);
     x_SetFill(gc->fill);
@@ -648,7 +650,7 @@ void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
 
 void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "polygon\n");
+    if (m_debug) Rprintf("polygon\n");
 
     x_SetLinetype(gc->lty, gc->lwd, gc->col);
     x_SetFill(gc->fill);
@@ -662,7 +664,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
                    double hadj, 
 	       const pGEcontext gc)
 {
-    if (m_debug) fprintf(stderr, "textUTF8: %s, %x  at %.1f %.1f\n", str, gc->col, x, y);
+    if (m_debug) Rprintf("textUTF8: %s, %x  at %.1f %.1f\n", str, gc->col, x, y);
 
     x_SetFont(gc->fontface, x_EffPointsize(gc), rot, gc->fontfamily);
     x_SetHAdj(hadj);
@@ -728,9 +730,13 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     dd->strWidth = EMFcb::StrWidth;
     dd->rect = EMFcb::Rect;
     dd->circle = EMFcb::Circle;
+#if R_GE_version >= 6
     dd->raster = EMFcb::Raster;
     dd->cap = EMFcb::Cap;
+#endif
+#if R_GE_version >= 8
     dd->path = EMFcb::Path;
+#endif
     dd->polygon = EMFcb::Polygon;
     dd->polyline = EMFcb::Polyline;
     dd->locator = EMFcb::Locator;

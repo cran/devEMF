@@ -1,8 +1,9 @@
 /*
- * Code in the file is extracted verbatim from devPS.c from R-2.12.1
- * for dealing with font metrics.  Only additions are a few #defines
- * at the very beginning of the file.  Only changes are replacing all
- * occurences of "(_(" with "((".
+ * Most code in the file is extracted verbatim from devPS.c from
+ * R-2.12.1 for dealing with font metrics.  Slight #if modifications
+ * to make handling of gzip i/o compatible with R-2.14.0.  Only
+ * additions are a few #defines at the very beginning of the file.
+ * Only changes are replacing all occurences of "(_(" with "((".
  *
  *  R : A Computer Language for Statistical Data Analysis
  *  Copyright (C) 1995, 1996  Robert Gentleman and Ross Ihaka
@@ -47,8 +48,17 @@ LibExtern char *R_Home;             /* Root of the R tree */
 #include <ctype.h>
 #include <errno.h>
 
+#include <Rversion.h>
+#if R_VERSION >= 134656 //revisions in 2.14.0
+  #include "zlib.h"
+  /* from connections.o */
+  extern "C" gzFile R_gzopen (const char *path, const char *mode);
+  extern "C" char *R_gzgets(gzFile file, char *buf, int len);
+  extern "C" int R_gzclose (gzFile file);
+#else
 #ifdef WIN32
 # define USE_GZIO
+#endif
 #endif
 
 #ifdef USE_GZIO
@@ -491,14 +501,22 @@ PostScriptLoadFontMetrics(const char * const fontpath,
 {
     char buf[BUFSIZE], *p, truth[10];
     int mode, i = 0, j, ii, nKPX=0;
+#if R_VERSION >= 134656 //revisions in 2.14.0
+    gzFile fp;
+#else
 #ifdef USE_GZIO
     gzFile fp;
 #else
     FILE *fp;
 #endif
+#endif
 
     if(strchr(fontpath, FILESEP[0])) strcpy(buf, fontpath);
     else
+#if R_VERSION >= 134656 //revisions in 2.14.0
+	snprintf(buf, BUFSIZE,"%s%slibrary%sgrDevices%safm%s%s.gz",
+		 R_Home, FILESEP, FILESEP, FILESEP, FILESEP, fontpath);
+#else
 #ifdef USE_GZIO
 	snprintf(buf, BUFSIZE,"%s%slibrary%sgrDevices%safm%s%s.gz",
 		 R_Home, FILESEP, FILESEP, FILESEP, FILESEP, fontpath);
@@ -506,11 +524,24 @@ PostScriptLoadFontMetrics(const char * const fontpath,
 	snprintf(buf, BUFSIZE,"%s%slibrary%sgrDevices%safm%s%s",
 		 R_Home, FILESEP, FILESEP, FILESEP, FILESEP, fontpath);
 #endif
+#endif
 #ifdef DEBUG_PS
     Rprintf("afmpath is %s\n", buf);
     Rprintf("reencode is %d\n", reencode);
 #endif
 
+#if R_VERSION >= 134656 //revisions in 2.14.0
+    if (!(fp = R_gzopen(R_ExpandFileName(buf), "rb"))) {
+        /* try uncompressed version */
+        snprintf(buf, BUFSIZE,"%s%slibrary%sgrDevices%safm%s%s",
+                 R_Home, FILESEP, FILESEP, FILESEP, FILESEP, fontpath);
+        if (!(fp = R_gzopen(R_ExpandFileName(buf), "rb"))) {
+            warning("afm file '%s' could not be opened",
+                    R_ExpandFileName(buf));
+            return 0;
+        }
+    }
+#else
 #ifdef USE_GZIO
     if (!(fp = gzopen(R_ExpandFileName(buf), "rb"))) {
 #else
@@ -520,6 +551,7 @@ PostScriptLoadFontMetrics(const char * const fontpath,
 		R_ExpandFileName(buf));
 	return 0;
     }
+#endif
 
     metrics->KernPairs = NULL;
     metrics->CapHeight = metrics->XHeight = metrics->Descender =
@@ -532,10 +564,14 @@ PostScriptLoadFontMetrics(const char * const fontpath,
 	metrics->CharInfo[ii].WX = NA_SHORT;
 	for(j = 0; j < 4; j++) metrics->CharInfo[ii].BBox[j] = 0;
     }
+#if R_VERSION >= 134656 //revisions in 2.14.0
+    while (R_gzgets(fp, buf, BUFSIZE)) {
+#else
 #ifdef USE_GZIO
     while (gzgets(fp, buf, BUFSIZE)) {
 #else
     while (fgets(buf, BUFSIZE, fp)) {
+#endif
 #endif
 	switch(KeyType(buf)) {
 
@@ -642,10 +678,14 @@ PostScriptLoadFontMetrics(const char * const fontpath,
 	}
     }
     metrics->nKP = i;
+#if R_VERSION >= 134656 //revisions in 2.14.0
+    R_gzclose(fp);
+#else
 #ifdef USE_GZIO
     gzclose(fp);
 #else
     fclose(fp);
+#endif
 #endif
     /* Make an index for kern-pair searches: relies on having contiguous
        blocks by first char for efficiency, but works in all cases. */
@@ -665,10 +705,14 @@ PostScriptLoadFontMetrics(const char * const fontpath,
     }
     return 1;
 pserror:
+#if R_VERSION >= 134656 //revisions in 2.14.0
+    R_gzclose(fp);
+#else
 #ifdef USE_GZIO
     gzclose(fp);
 #else
     fclose(fp);
+#endif
 #endif
     return 0;
 }
