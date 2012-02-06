@@ -1,3 +1,11 @@
+v1.1   --  6 Feb 2012
+  - Add support for different line end and join styles.
+v1.0-1
+  - Amend help to mention that partial transparency is not supported
+    by the EMF format
+v1.0
+  - Been using for 6mo with no problems; bump version to 1.
+  - Replace remaining few uses of printf with Rprintf
 v0.9-4
   - Placed package within NAMESPACE (in prep for R-2.14.0)
   - modified ps_fonts.h to make compatible with R-2.14.0 revised

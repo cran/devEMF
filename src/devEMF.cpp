@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 175 2011-05-20 15:49:32Z pjohnson $
+/* $Id: devEMF.cpp 188 2011-10-18 14:23:00Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -133,21 +133,21 @@ private:
     }
 
     struct SPen : EMF::S_EXTCREATEPEN {
-        SPen(int lty, int lwd, int col, bool useUserLty) {
-            ihPen = 0;
+        SPen(const pGEcontext gc, bool useUserLty) {
+            ihPen = 0; //must be reset later
             offBmi = cbBmi = offBits = cbBits = 0;
-            elp.penStyle = PS_GEOMETRIC | (R_TRANSPARENT(col) ? PS_NULL : PS_USERSTYLE);
-            elp.width = lwd;
+            elp.penStyle = PS_GEOMETRIC;
+            elp.width = x_Inches2Dev(gc->lwd/96.);
             elp.brushStyle = BS_SOLID;
-            elp.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
+            elp.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
             elp.brushHatch = 0;
             elp.numEntries = 0;
-            if (R_TRANSPARENT(col)) {
+            if (R_TRANSPARENT(gc->col)) {
+                elp.penStyle |= PS_NULL;
                 return;
             }
             if (!useUserLty) {
-                elp.penStyle = PS_GEOMETRIC;
-                switch(lty) {
+                switch(gc->lty) {
                 case LTY_SOLID: elp.penStyle |= PS_SOLID; break;
                 case LTY_DASHED: elp.penStyle |= PS_DASH; break;
                 case LTY_DOTTED: elp.penStyle |= PS_DOT; break;
@@ -156,17 +156,33 @@ private:
                 default: elp.penStyle |= PS_SOLID;
                     Rf_warning("Using lty unsupported by EMF device");
                 }
-            } else {
+            } else { //custom line style is preferable
+                elp.penStyle |= PS_USERSTYLE;
+                int lty = gc->lty;
                 for (int tmp = lty;  elp.numEntries < 8  &&  tmp & 15;
                      ++elp.numEntries, tmp >>= 4);
                 if (elp.numEntries == 0) {
-                    elp.penStyle = PS_SOLID | PS_GEOMETRIC;
+                    elp.penStyle |= PS_SOLID;
                 } else {
                     styleEntries = new TUInt4[elp.numEntries];
                     for(int i = 0;  i < 8  &&  lty & 15;  ++i, lty >>= 4) {
                         styleEntries[i] = x_Inches2Dev((lty & 15)/72.);
                     }
                 }
+            }
+
+            switch (gc->lend) {
+            case GE_ROUND_CAP: elp.penStyle |= PS_ENDCAP_ROUND; break;
+            case GE_BUTT_CAP: elp.penStyle |= PS_ENDCAP_FLAT; break;
+            case GE_SQUARE_CAP: elp.penStyle |= PS_ENDCAP_SQUARE; break;
+            default: break;//actually of range, but R doesn't complain..
+            }
+
+            switch (gc->ljoin) {
+            case GE_ROUND_JOIN: elp.penStyle |= PS_JOIN_ROUND; break;
+            case GE_MITRE_JOIN: elp.penStyle |= PS_JOIN_MITER; break;
+            case GE_BEVEL_JOIN: elp.penStyle |= PS_JOIN_BEVEL; break;
+            default: break;//actually of range, but R doesn't complain..
             }
 	}
     };
@@ -208,13 +224,12 @@ private:
     };
     typedef set<SFont> CFonts;
 
-    void x_SetLinetype(int lty, int lwd, int col) {
-	if (m_debug) Rprintf("lty:%i; lwd:%i\n", lty, lwd);
-	SPen *newPen = new SPen(lty, x_Inches2Dev(lwd/96.), col,
-                                m_UseUserLty);
+    void x_SetLinetype(const pGEcontext gc) {
+	if (m_debug) Rprintf("lty:%i; lwd:%i\n", gc->lty, gc->lwd);
+	SPen *newPen = new SPen(gc, m_UseUserLty);
 	CPens::iterator i = m_Pens.find(newPen);
 	if (i == m_Pens.end()) {
-            if (R_ALPHA(col) > 0  &&  R_ALPHA(col) < 255) {
+            if (R_ALPHA(gc->col) > 0  &&  R_ALPHA(gc->col) < 255) {
                 Rf_warning("partial transparency is not supported for EMF");
             }
 	    newPen->ihPen = ++m_LastHandle;
@@ -226,6 +241,12 @@ private:
 	if ((*i)->ihPen != m_CurrPen) {
 	    x_CreateRcdSelectObj((*i)->ihPen);
 	    m_CurrPen = (*i)->ihPen;
+            if (gc->ljoin == GE_MITRE_JOIN) { //need to set mitre limit as well
+                EMF::S_SETMITERLIMIT emr;
+                //NOTE: guessing on mitre units; haven't checked
+                emr.miterLimit = x_Inches2Dev(gc->lmitre/72.);
+                x_WriteRcd(emr);
+            }
 	}
     }
     void x_SetFill(int col) {
@@ -603,7 +624,7 @@ void CDevEMF::Line(double x1, double y1, double x2, double y2,
     if (m_debug) Rprintf("line\n");
 
     if (x1 != x2  ||  y1 != y2) {
-	x_SetLinetype(gc->lty, gc->lwd, gc->col);
+	x_SetLinetype(gc);
         double x[2], y[2];
         x[0] = x1; x[1] = x2;
         y[0] = y1; y[1] = y2;
@@ -614,7 +635,7 @@ void CDevEMF::Line(double x1, double y1, double x2, double y2,
 void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
 {
     if (m_debug) Rprintf("polyline\n");
-    x_SetLinetype(gc->lty, gc->lwd, gc->col);
+    x_SetLinetype(gc);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
     EMF::SPoly polyline(EMR_POLYLINE, n, x, y);
@@ -624,7 +645,7 @@ void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
 void CDevEMF::Rect(double x0, double y0, double x1, double y1, const pGEcontext gc)
 {
     if (m_debug) Rprintf("rect\n");
-    x_SetLinetype(gc->lty, gc->lwd, gc->col);
+    x_SetLinetype(gc);
     x_SetFill(gc->fill);
 
     x_TransformY(&y0, 1);//EMF has origin in upper left; R in lower left
@@ -639,7 +660,7 @@ void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
 {
     if (m_debug) Rprintf("circle\n");
 
-    x_SetLinetype(gc->lty, gc->lwd, gc->col);
+    x_SetLinetype(gc);
     x_SetFill(gc->fill);
 
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
@@ -652,7 +673,7 @@ void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
 {
     if (m_debug) Rprintf("polygon\n");
 
-    x_SetLinetype(gc->lty, gc->lwd, gc->col);
+    x_SetLinetype(gc);
     x_SetFill(gc->fill);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left

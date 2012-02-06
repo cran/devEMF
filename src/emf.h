@@ -44,23 +44,29 @@ namespace EMF {
         EMR_CREATEBRUSHINDIRECT = 39,
         EMR_ELLIPSE = 42,
         EMR_RECTANGLE = 43,
+        EMR_SETMITERLIMIT = 58,
         EMR_EXTCREATEFONTINDIRECTW = 82,
         EMR_EXTTEXTOUTW = 84,
         EMR_EXTCREATEPEN = 95
     };
 
     enum EPenStyle {
-        PS_SOLID       =  0x00000000,
-        PS_DASH        =  0x00000001,
-        PS_DOT         =  0x00000002,
-        PS_DASHDOT     =  0x00000003,
-        PS_DASHDOTDOT  =  0x00000004,
-        PS_NULL        =  0x00000005,
-        PS_INSIDEFRAME =  0x00000006,
-        PS_USERSTYLE   =  0x00000007,
-        PS_ALTERNATE   =  0x00000008,
-        PS_STYLE_MASK  =  0x0000000f,
-        PS_GEOMETRIC   =  0x00010000
+        PS_ENDCAP_ROUND  = 0x00000000,
+        PS_JOIN_ROUND    = 0x00000000,
+        PS_SOLID         = 0x00000000,
+        PS_DASH          = 0x00000001,
+        PS_DOT           = 0x00000002,
+        PS_DASHDOT       = 0x00000003,
+        PS_DASHDOTDOT    = 0x00000004,
+        PS_NULL          = 0x00000005,
+        PS_INSIDEFRAME   = 0x00000006,
+        PS_USERSTYLE     = 0x00000007,
+        PS_ALTERNATE     = 0x00000008,
+        PS_ENDCAP_SQUARE = 0x00000100,
+        PS_ENDCAP_FLAT   = 0x00000200,
+        PS_JOIN_BEVEL    = 0x00001000,
+        PS_JOIN_MITER    = 0x00002000,
+        PS_GEOMETRIC     = 0x00010000
     };
 
     enum EBrushStyle {
@@ -436,6 +442,14 @@ namespace EMF {
         S_SETMAPMODE(void) : SRecord(EMR_SETMAPMODE) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << mode;
+        }
+    };
+
+    struct S_SETMITERLIMIT : SRecord {
+        TUInt4 miterLimit;
+        S_SETMITERLIMIT(void) : SRecord(EMR_SETMITERLIMIT) {}
+	void Serialize(std::string &o) const {
+            o << iType << nSize << miterLimit;
         }
     };
 
