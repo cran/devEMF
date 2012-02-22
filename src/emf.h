@@ -1,4 +1,4 @@
-/* $Id: emf.h 175 2011-05-20 15:49:32Z pjohnson $
+/* $Id: emf.h 197 2012-03-22 18:15:35Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -119,7 +119,8 @@ namespace EMF {
         TA_TOP             = 0x00,
         TA_RIGHT           = 0x02,
         TA_CENTER          = 0x06,
-        TA_BOTTOM          = 0x08
+        TA_BOTTOM          = 0x08,
+        TA_BASELINE        = 0x18
     };
 
     enum EBkMode {

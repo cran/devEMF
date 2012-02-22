@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 188 2011-10-18 14:23:00Z pjohnson $
+/* $Id: devEMF.cpp 197 2012-03-22 18:15:35Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -287,11 +287,11 @@ private:
         if (m_CurrHadj != hadj) {
             EMF::S_SETTEXTALIGN emr;
             if (hadj == 0.) {
-                emr.mode = TA_BOTTOM|TA_LEFT;
+                emr.mode = TA_BASELINE|TA_LEFT;
             } else if (hadj == 1.) {
-                emr.mode = TA_BOTTOM|TA_RIGHT;
+                emr.mode = TA_BASELINE|TA_RIGHT;
             } else {
-                emr.mode = TA_BOTTOM|TA_CENTER;
+                emr.mode = TA_BASELINE|TA_CENTER;
             }
             x_WriteRcd(emr);
             m_CurrHadj = hadj;
@@ -448,7 +448,7 @@ static int symbol2unicode[224] = {
 void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
                      double* descent, double* width)
 {
-    if (m_debug) Rprintf("metricinfo\n");
+    if (m_debug) Rprintf("metricinfo: %i\n",c);
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
     if (!m_PostscriptFonts) { //no metrics available
         *ascent = 0;
@@ -513,6 +513,7 @@ double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
         width += w;
     }
 
+    if (m_debug) Rprintf("--|strwidth\n");
     //cout << "strwidth: " << width/CDevEMF::x_Inches2Dev(1) << endl;
     return width;
 }
@@ -691,17 +692,6 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
     x_SetHAdj(hadj);
     x_SetTextColor(gc->col);
 
-    {//R assumes vertical centering; EMF places at baseline
-        double a, d, w, ascent = 0;
-        for (const char *c = str;  *c;  ++c) {
-            MetricInfo(*c, gc, &a, &d, &w);
-            if (a > ascent) {
-                ascent = a;
-            }
-        }
-        x += (ascent/2.) * sin(rot*M_PI/180);
-        y -= (ascent/2.) * cos(rot*M_PI/180);
-    }
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
     EMF::S_EXTTEXTOUTW emr;
     emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
@@ -790,7 +780,7 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     /* Pure guesswork and eyeballing ... */
     dd->xCharOffset =  0.4900;
     dd->yCharOffset =  0.3333;
-    dd->yLineBias = 0.4; /*0.1;*/
+    dd->yLineBias = 0.2;
 
     /* Inches per device unit */
     dd->ipr[0] = dd->ipr[1] = 1./CDevEMF::x_Inches2Dev(1);
