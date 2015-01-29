@@ -1,14 +1,16 @@
 Package: devEMF
 Type: Package
-Title: EMF graphics output device
-Version: 1.2
-Date: 2012-2-22
-Author: Philip Johnson, with code from R-core
-Maintainer: Philip Johnson <plfjohnson@emory.edu>
-Depends: R (>= 2.10.1), grDevices
+Title: EMF Graphics Output Device
+Version: 2.0
+Date: 2015-1-29
+Author: Philip Johnson
+Maintainer: Philip Johnson <plfj@umd.edu>
+Depends: R (>= 2.10.1)
+SystemRequirements: Xft (only needed for platforms other than OSX and
+        Windows)
 Description: Output graphics to EMF (enhanced metafile).
 License: GPL-3
-Packaged: 2013-11-19 07:02:09 UTC; ripley
-Repository: CRAN
-Date/Publication: 2013-11-19 08:03:48
+Packaged: 2015-01-29 18:45:58 UTC; pjohnson
 NeedsCompilation: yes
+Repository: CRAN
+Date/Publication: 2015-01-29 20:37:36

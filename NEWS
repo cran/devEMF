@@ -1,9 +1,29 @@
-v1.2   --  22 Feb 2012
-  - Bug fix: TextUTF8 used incorrect vertical alignment
+v2.0 -- 29 Jan 2015
+  -switch to platform-specific font metric code instead of accessing
+   the AFM files supplied with core R via a non-public R API (this
+   previous approach violated CRAN policy).  The primary downside is
+   that the new code will not operate on non-OSX, non-Windows
+   platforms unless X windows is installed along with the Xft
+   development headers.  It should work on OSX and Windows out of the
+   box; please contact me if you have trouble (I primarily work on
+   linux).
+  -bug fix: EMF polygon record had potential rounding mismatch between
+   vertex coordinates and bounding box coordinates.
+  -bug fix: when PS_NULL, set pen BS_NULL (although seems unnecessary
+   in practice)
+
+v1.2-1  --  18 Feb 2013
+  - Bug fix: EMF custom line types not working properly for solid
+    lines. (Thanks to Nis Martensen for reporting and patching)
+
+v1.2  --  22 Feb 2012
+  - Bug fix: TextUTF8 used incorrect vertical alignment. (Thanks to
+    Jared Decker for reporting)
   - change yLineBias to be 0.2 for compatibility with R >= 2.14
 
-v1.1   --  6 Feb 2012
-  - Add support for different line end and join styles.
+v1.1  --  6 Feb 2012
+  - Add support for different line end and join styles. (Thanks to
+    Mathias Walter for suggesting)
 
 v1.0-1
   - Amend help to mention that partial transparency is not supported

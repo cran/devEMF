@@ -1,10 +1,10 @@
-/* $Id: devEMF.cpp 197 2012-03-22 18:15:35Z pjohnson $
+/* $Id: devEMF.cpp 306 2015-01-29 18:45:54Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
 
 
-    Copyright (C) 2011 Philip Johnson
+    Copyright (C) 2011-2015 Philip Johnson
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -39,34 +39,23 @@
 
 #include <fstream>
 #include <set>
+#include <map>
 
-#include "emf.h"      //declares EMF objects
-#include "ps_fonts.h" //font metric code from devPS.c included here
+#include "emf.h" //defines EMF data structures
+#include "fontmetrics.h" //platform-specific font metric code
 
 using namespace std;
-using namespace EMF;
+
 
 class CDevEMF {
 public:
     CDevEMF(bool userLty, const char *defaultFontFamily) : m_debug(false) {
         m_UseUserLty = userLty;
-        m_PostscriptFonts = NULL;
-	addEncoding("ISOLatin1.enc", FALSE);
-        AddFont(defaultFontFamily);
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
         m_NumRecords = 0;
         m_LastHandle = m_CurrPen = m_CurrFont = m_CurrBrush = 0;
         m_CurrHadj = m_CurrTextCol = -1;
-    }
-    type1fontfamily AddFont(const char *family) {
-        int gotFont;
-        type1fontfamily
-            font = addFont(family, FALSE, loadedEncodings);
-        if (font) {
-            m_PostscriptFonts = addDeviceFont(font, m_PostscriptFonts,&gotFont);
-        }
-        return font;
     }
 
     // Member-function R callbacks (see below class definition for
@@ -136,35 +125,38 @@ private:
         SPen(const pGEcontext gc, bool useUserLty) {
             ihPen = 0; //must be reset later
             offBmi = cbBmi = offBits = cbBits = 0;
-            elp.penStyle = PS_GEOMETRIC;
+            elp.penStyle = EMF::ePS_GEOMETRIC;
             elp.width = x_Inches2Dev(gc->lwd/96.);
-            elp.brushStyle = BS_SOLID;
+            elp.brushStyle = EMF::eBS_SOLID;
             elp.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
             elp.brushHatch = 0;
             elp.numEntries = 0;
             if (R_TRANSPARENT(gc->col)) {
-                elp.penStyle |= PS_NULL;
+                elp.penStyle |= EMF::ePS_NULL;
+                elp.brushStyle = EMF::eBS_NULL;
                 return;
             }
             if (!useUserLty) {
+                // if not using EMF custom line types, then map
+                // between vaguely equivalent default line types
                 switch(gc->lty) {
-                case LTY_SOLID: elp.penStyle |= PS_SOLID; break;
-                case LTY_DASHED: elp.penStyle |= PS_DASH; break;
-                case LTY_DOTTED: elp.penStyle |= PS_DOT; break;
-                case LTY_DOTDASH: elp.penStyle |= PS_DASHDOT; break;
-                case LTY_LONGDASH: elp.penStyle |= PS_DASHDOTDOT; break;
-                default: elp.penStyle |= PS_SOLID;
+                case LTY_SOLID: elp.penStyle |= EMF::ePS_SOLID; break;
+                case LTY_DASHED: elp.penStyle |= EMF::ePS_DASH; break;
+                case LTY_DOTTED: elp.penStyle |= EMF::ePS_DOT; break;
+                case LTY_DOTDASH: elp.penStyle |= EMF::ePS_DASHDOT; break;
+                case LTY_LONGDASH: elp.penStyle |= EMF::ePS_DASHDOTDOT; break;
+                default: elp.penStyle |= EMF::ePS_SOLID;
                     Rf_warning("Using lty unsupported by EMF device");
                 }
             } else { //custom line style is preferable
-                elp.penStyle |= PS_USERSTYLE;
                 int lty = gc->lty;
                 for (int tmp = lty;  elp.numEntries < 8  &&  tmp & 15;
                      ++elp.numEntries, tmp >>= 4);
                 if (elp.numEntries == 0) {
-                    elp.penStyle |= PS_SOLID;
+                    elp.penStyle |= EMF::ePS_SOLID;
                 } else {
-                    styleEntries = new TUInt4[elp.numEntries];
+                    elp.penStyle |= EMF::ePS_USERSTYLE;
+                    styleEntries = new EMF::TUInt4[elp.numEntries];
                     for(int i = 0;  i < 8  &&  lty & 15;  ++i, lty >>= 4) {
                         styleEntries[i] = x_Inches2Dev((lty & 15)/72.);
                     }
@@ -172,16 +164,16 @@ private:
             }
 
             switch (gc->lend) {
-            case GE_ROUND_CAP: elp.penStyle |= PS_ENDCAP_ROUND; break;
-            case GE_BUTT_CAP: elp.penStyle |= PS_ENDCAP_FLAT; break;
-            case GE_SQUARE_CAP: elp.penStyle |= PS_ENDCAP_SQUARE; break;
+            case GE_ROUND_CAP: elp.penStyle |= EMF::ePS_ENDCAP_ROUND; break;
+            case GE_BUTT_CAP: elp.penStyle |= EMF::ePS_ENDCAP_FLAT; break;
+            case GE_SQUARE_CAP: elp.penStyle |= EMF::ePS_ENDCAP_SQUARE; break;
             default: break;//actually of range, but R doesn't complain..
             }
 
             switch (gc->ljoin) {
-            case GE_ROUND_JOIN: elp.penStyle |= PS_JOIN_ROUND; break;
-            case GE_MITRE_JOIN: elp.penStyle |= PS_JOIN_MITER; break;
-            case GE_BEVEL_JOIN: elp.penStyle |= PS_JOIN_BEVEL; break;
+            case GE_ROUND_JOIN: elp.penStyle |= EMF::ePS_JOIN_ROUND; break;
+            case GE_MITRE_JOIN: elp.penStyle |= EMF::ePS_JOIN_MITER; break;
+            case GE_BEVEL_JOIN: elp.penStyle |= EMF::ePS_JOIN_BEVEL; break;
             default: break;//actually of range, but R doesn't complain..
             }
 	}
@@ -195,7 +187,7 @@ private:
     struct SBrush : EMF::SBrush {
 	SBrush(int col) {
 	    ihBrush = 0; //must be reset later
-            lb.brushStyle = (R_TRANSPARENT(col) ? BS_NULL : BS_SOLID);
+            lb.brushStyle = (R_TRANSPARENT(col) ? EMF::eBS_NULL : EMF::eBS_SOLID);
             lb.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
             lb.brushHatch = 0; //unused with BS_SOLID or BS_NULL
 	}
@@ -203,29 +195,44 @@ private:
     typedef set<SBrush> CBrushes;
 
     struct SFont : EMF::SFont {
+        SSysFontInfo *m_SysFontInfo;
 	SFont(int face, int size, int rot, const char* family) {
+            m_SysFontInfo = NULL;
 	    ihFont = 0; //must be reset later
 	    lf.height = -size;//(-) matches against *character* height
 	    lf.width = 0;
 	    lf.escapement = rot*10;
 	    lf.orientation = 0;
 	    lf.weight = (face == 2  ||  face == 4) ?
-                eFontWeight_bold : eFontWeight_normal;
+                EMF::eFontWeight_bold : EMF::eFontWeight_normal;
 	    lf.italic = (face == 3  ||  face == 4) ? 0x01 : 0x00;
 	    lf.underline = 0x00;
 	    lf.strikeOut = 0x00;
-	    lf.charSet = DEFAULT_CHARSET;
-	    lf.outPrecision = OUT_STROKE_PRECIS;
-	    lf.clipPrecision = CLIP_DEFAULT_PRECIS;
-	    lf.quality = DEFAULT_QUALITY;
-	    lf.pitchAndFamily = FF_DONTCARE + DEFAULT_PITCH;
+	    lf.charSet = EMF::eDEFAULT_CHARSET;
+	    lf.outPrecision = EMF::eOUT_STROKE_PRECIS;
+	    lf.clipPrecision = EMF::eCLIP_DEFAULT_PRECIS;
+	    lf.quality = EMF::eDEFAULT_QUALITY;
+	    lf.pitchAndFamily = EMF::eFF_DONTCARE + EMF::eDEFAULT_PITCH;
             lf.SetFace(iConvUTF8toUTF16LE(family)); //assume UTF8/ASCII family
 	}
+	~SFont() { delete m_SysFontInfo; }
     };
-    typedef set<SFont> CFonts;
+    struct FontPtrCmp {
+        bool operator() (SFont* f1, SFont* f2) const {
+            return memcmp(&f1->lf,&f2->lf, sizeof(EMF::SLogFont)) < 0;
+        }
+    };
+    class CFonts : public set<SFont*, FontPtrCmp> {
+    public:
+        ~CFonts(void) {
+            for (iterator i = begin();  i != end();  ++i) {
+                delete *i;
+            }
+        }
+    };
 
     void x_SetLinetype(const pGEcontext gc) {
-	if (m_debug) Rprintf("lty:%i; lwd:%i\n", gc->lty, gc->lwd);
+	if (m_debug) Rprintf("lty:%i; lwd:%f; col:%x\n", gc->lty, gc->lwd, gc->col);
 	SPen *newPen = new SPen(gc, m_UseUserLty);
 	CPens::iterator i = m_Pens.find(newPen);
 	if (i == m_Pens.end()) {
@@ -250,7 +257,7 @@ private:
 	}
     }
     void x_SetFill(int col) {
-	if (m_debug) Rprintf("fill:%i\n", col);
+	if (m_debug) Rprintf("fill:%x\n", col);
 	SBrush newBrush(col);
 	CBrushes::iterator i = m_Brushes.find(newBrush);
 	if (i == m_Brushes.end()) {
@@ -266,32 +273,38 @@ private:
 	    m_CurrBrush = i->ihBrush;
 	}
     }
-    void x_SetFont(int face, double size, int rot, const char *family) {
+    const SFont* x_LoadFont(int face, double size, int rot, const char *family){
         if (family[0] == '\0') {
             family = m_DefaultFontFamily.c_str();
         }
-	if (m_debug) Rprintf("set font face:%i; size:%.1f; rot:%i\n", face, size, rot);
-	SFont newFont(face, x_Inches2Dev(size/72.), rot, family);
+	SFont *newFont = new SFont(face, x_Inches2Dev(size/72.), rot, family);
 	CFonts::iterator i = m_Fonts.find(newFont);
 	if (i == m_Fonts.end()) {
-	    newFont.ihFont = ++m_LastHandle;
+            if (m_debug) Rprintf("loadfont.  family:%s; face:%i; size:%.1f; rot:%i\n", family, face, size, rot);
+	    newFont->ihFont = ++m_LastHandle;
+            newFont->m_SysFontInfo = 
+                new SSysFontInfo(family, x_Inches2Dev(size/72.), face);
 	    i = m_Fonts.insert(newFont).first;
-	    x_WriteRcd(newFont);
+	    x_WriteRcd(*newFont);
 	}
-	if (i->ihFont != m_CurrFont) {
-	    x_CreateRcdSelectObj(i->ihFont);
-	    m_CurrFont = i->ihFont;
+        return *i;
+    }
+    void x_SetFont(int face, double size, int rot, const char *family) {
+        const SFont *font = x_LoadFont(face, size, rot, family);
+	if (font->ihFont != m_CurrFont) {
+	    x_CreateRcdSelectObj(font->ihFont);
+	    m_CurrFont = font->ihFont;
 	}
     }
     void x_SetHAdj(double hadj) {
         if (m_CurrHadj != hadj) {
             EMF::S_SETTEXTALIGN emr;
             if (hadj == 0.) {
-                emr.mode = TA_BASELINE|TA_LEFT;
+                emr.mode = EMF::eTA_BASELINE|EMF::eTA_LEFT;
             } else if (hadj == 1.) {
-                emr.mode = TA_BASELINE|TA_RIGHT;
+                emr.mode = EMF::eTA_BASELINE|EMF::eTA_RIGHT;
             } else {
-                emr.mode = TA_BASELINE|TA_CENTER;
+                emr.mode = EMF::eTA_BASELINE|EMF::eTA_CENTER;
             }
             x_WriteRcd(emr);
             m_CurrHadj = hadj;
@@ -321,13 +334,12 @@ private:
     int m_Width, m_Height;
     bool m_UseUserLty;
     string m_DefaultFontFamily;
-    type1fontlist m_PostscriptFonts;
 
     //states
     double m_CurrHadj;
     int m_CurrTextCol;
 
-    //objects
+    //EMF objects
     int m_LastHandle;
     CPens m_Pens;       unsigned int m_CurrPen;
     CBrushes m_Brushes; unsigned int m_CurrBrush;
@@ -409,111 +421,42 @@ namespace EMFcb {
     }
 } //end of R callbacks / extern "C"
 
-/* Table copied from R util.c, which got from
-http://unicode.org/Public/MAPPINGS/VENDORS/ADOBE/symbol.txt
-*/
-
-static int symbol2unicode[224] = {
-    0x0020, 0x0021, 0x2200, 0x0023, 0x2203, 0x0025, 0x0026, 0x220D,
-    0x0028, 0x0029, 0x2217, 0x002B, 0x002C, 0x2212, 0x002E, 0x002F,
-    0x0030, 0x0031, 0x0032, 0x0033, 0x0034, 0x0035, 0x0036, 0x0037,
-    0x0038, 0x0039, 0x003A, 0x003B, 0x003C, 0x003D, 0x003E, 0x003F,
-    0x2245, 0x0391, 0x0392, 0x03A7, 0x0394, 0x0395, 0x03A6, 0x0393,
-    0x0397, 0x0399, 0x03D1, 0x039A, 0x039B, 0x039C, 0x039D, 0x039F,
-    0x03A0, 0x0398, 0x03A1, 0x03A3, 0x03A4, 0x03A5, 0x03C2, 0x03A9,
-    0x039E, 0x03A8, 0x0396, 0x005B, 0x2234, 0x005D, 0x22A5, 0x005F,
-    0xF8E5, 0x03B1, 0x03B2, 0x03C7, 0x03B4, 0x03B5, 0x03C6, 0x03B3,
-    0x03B7, 0x03B9, 0x03D5, 0x03BA, 0x03BB, 0x03BC, 0x03BD, 0x03BF,
-    0x03C0, 0x03B8, 0x03C1, 0x03C3, 0x03C4, 0x03C5, 0x03D6, 0x03C9,
-    0x03BE, 0x03C8, 0x03B6, 0x007B, 0x007C, 0x007D, 0x223C, 0x0020,
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020, 0x0020,
-    0x20AC, 0x03D2, 0x2032, 0x2264, 0x2044, 0x221E, 0x0192, 0x2663,
-    0x2666, 0x2665, 0x2660, 0x2194, 0x2190, 0x2191, 0x2192, 0x2193,
-    0x00B0, 0x00B1, 0x2033, 0x2265, 0x00D7, 0x221D, 0x2202, 0x2022,
-    0x00F7, 0x2260, 0x2261, 0x2248, 0x2026, 0xF8E6, 0xF8E7, 0x21B5,
-    0x2135, 0x2111, 0x211C, 0x2118, 0x2297, 0x2295, 0x2205, 0x2229,
-    0x222A, 0x2283, 0x2287, 0x2284, 0x2282, 0x2286, 0x2208, 0x2209,
-    0x2220, 0x2207, 0xF6DA, 0xF6D9, 0xF6DB, 0x220F, 0x221A, 0x22C5,
-    0x00AC, 0x2227, 0x2228, 0x21D4, 0x21D0, 0x21D1, 0x21D2, 0x21D3,
-    0x25CA, 0x2329, 0xF8E8, 0xF8E9, 0xF8EA, 0x2211, 0xF8EB, 0xF8EC,
-    0xF8ED, 0xF8EE, 0xF8EF, 0xF8F0, 0xF8F1, 0xF8F2, 0xF8F3, 0xF8F4,
-    0x0020, 0x232A, 0x222B, 0x2320, 0xF8F5, 0x2321, 0xF8F6, 0xF8F7,
-    0xF8F8, 0xF8F9, 0xF8FA, 0xF8FB, 0xF8FC, 0xF8FD, 0xF8FE, 0x0020
-};
-
 
 void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
                      double* descent, double* width)
 {
-    if (m_debug) Rprintf("metricinfo: %i\n",c);
+    if (m_debug) Rprintf("metricinfo: %i %x (face %i)\n",c,abs(c),gc->fontface);
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
-    if (!m_PostscriptFonts) { //no metrics available
+    if (c < 0) { c = -c; }
+
+    const SFont *font = x_LoadFont(max(1,min(5,gc->fontface)),
+                                   x_EffPointsize(gc), 0, gc->fontfamily);
+    if (font  &&  !font->m_SysFontInfo->HasChar(c)  &&  gc->fontface == 5) {
+        // hacky check for existence with "Symbol" font
+        font = x_LoadFont(5, x_EffPointsize(gc), 0, "Symbol");
+    }
+    if (!font) { //no metrics available
         *ascent = 0;
         *descent = 0;
         *width = 0;
-        return;
+    } else {
+        font->m_SysFontInfo->GetMetrics(c, ascent, descent, width);
     }
-
-    int face = gc->fontface;
-    if(face < 1 || face > 5) face = 1;
-    int fontIndex;//dummy
-    type1fontfamily family = findDeviceFont(gc->fontfamily, m_PostscriptFonts,
-                                            &fontIndex);
-    if (!family) {
-        family = AddFont(gc->fontfamily);
-        if (!family) { //no metrics available
-            *ascent = 0;
-            *descent = 0;
-            *width = 0;
-            return;
-        }
-    }
-    if (face == 5  &&  c < 0) {
-        //postscript metric info wants AdobeSymbol encoding, not
-        //unicode, so we (awkwardly) switch
-        int s;
-        for (s=0;  s<224  &&  symbol2unicode[s] != -c;  ++s);
-        if (s < 224) {
-            c = s + 32;
-        }
-    }
-    PostScriptMetricInfo(c, ascent, descent, width,
-                         &(family->fonts[face-1]->metrics),
-                         FALSE, family->encoding->convname);
-
-    *ascent = x_Inches2Dev(x_EffPointsize(gc) * *ascent/72.);
-    *descent = x_Inches2Dev(x_EffPointsize(gc) * *descent/72.);
-    *width = x_Inches2Dev(x_EffPointsize(gc) * *width/72.);
+    if (m_debug) Rprintf("\t%f/%f/%f\n",*ascent,*descent,*width);
 }
 
 
 double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
-    if (m_debug) Rprintf("strwidth\n");
-    int face = gc->fontface;
-    if(face < 1 || face > 5) face = 1;
+    if (m_debug) Rprintf("strwidth ('%s') --> ", str);
 
-    //FIXME: kerning
-    double a, d, w, width = 0;
-
-    string utf16 = iConvUTF8toUTF16LE(str);
-    int nChars = utf16.length()/2;
-
-    unsigned short *c = (unsigned short*) utf16.data();
-    for (int i = 0;  i < nChars;  ++i, ++c) {
-#ifdef WORDS_BIGENDIAN
-        *c = ((*c >> 8) & 0xFF) | ((*c & 0xFF) << 8);
-#endif
-        MetricInfo(-*c, gc, &a, &d, &w);
-        if (a == 0  &&  d == 0  &&  w == 0) { //failure
-            return 0;
-        }
-        width += w;
+    const SFont *font = x_LoadFont(max(1,min(5,gc->fontface)),
+                                   x_EffPointsize(gc), 0, gc->fontfamily);
+    double width = 0;
+    if (font) {
+        width = font->m_SysFontInfo->GetStrWidth(str);
     }
 
-    if (m_debug) Rprintf("--|strwidth\n");
+    if (m_debug) Rprintf("%f\n", width);
     //cout << "strwidth: " << width/CDevEMF::x_Inches2Dev(1) << endl;
     return width;
 }
@@ -547,13 +490,13 @@ void CDevEMF::x_CreateRcdHeader(void) {
 
     {//Don't paint text box background
         EMF::S_SETBKMODE emr;
-        emr.mode = TRANSPARENT;
+        emr.mode = EMF::eTRANSPARENT;
         x_WriteRcd(emr);
     }
 
     {//Logical units == device units
         EMF::S_SETMAPMODE emr;
-        emr.mode = MM_TEXT;
+        emr.mode = EMF::eMM_TEXT;
         x_WriteRcd(emr);
     }
 }
@@ -639,7 +582,7 @@ void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
     x_SetLinetype(gc);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
-    EMF::SPoly polyline(EMR_POLYLINE, n, x, y);
+    EMF::SPoly polyline(EMF::eEMR_POLYLINE, n, x, y);
     x_WriteRcd(polyline);
 }
 
@@ -672,13 +615,13 @@ void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
 
 void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
 {
-    if (m_debug) Rprintf("polygon\n");
+    if (m_debug) { Rprintf("polygon"); for (int i = 0; i<n;  ++i) {Rprintf("(%f,%f) ", x[i], y[i]);}; Rprintf("\n");}
 
     x_SetLinetype(gc);
     x_SetFill(gc->fill);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
-    EMF::SPoly polygon(EMR_POLYGON, n, x, y);
+    EMF::SPoly polygon(EMF::eEMR_POLYGON, n, x, y);
     x_WriteRcd(polygon);
 }
 
@@ -695,7 +638,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
     EMF::S_EXTTEXTOUTW emr;
     emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
-    emr.graphicsMode = GM_COMPATIBLE;
+    emr.graphicsMode = EMF::eGM_COMPATIBLE;
     emr.exScale = 1;
     emr.eyScale = 1;
     emr.emrtext.reference.Set(lround(x), lround(y));

@@ -1,6 +1,0 @@
-This package owes a huge thanks to the R core team for developing the
-postscript font metric code in the core grDevices library (copied in
-this package in the "src/ps_fonts.h" file) and including AFM files as
-a standard part of an R installation.  Without these files, this
-package would not provide font metrics and the excellent plotmath
-capabilities of R would be unusable with the emf output device.

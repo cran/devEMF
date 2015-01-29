@@ -1,4 +1,4 @@
-/* $Id: emf.h 197 2012-03-22 18:15:35Z pjohnson $
+/* $Id: emf.h 306 2015-01-29 18:45:54Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -31,117 +31,117 @@
 // structs for EMF
 namespace EMF {
     enum ERecordType {
-        EMR_HEADER = 1,
-        EMR_POLYGON = 3,
-        EMR_POLYLINE = 4,
-        EMR_EOF = 14,
-        EMR_SETMAPMODE = 17,
-        EMR_SETBKMODE = 18,
-        EMR_SETTEXTALIGN = 22,
-        EMR_SETTEXTCOLOR = 24,
-        EMR_SELECTOBJECT = 37,
-        EMR_CREATEPEN = 38,
-        EMR_CREATEBRUSHINDIRECT = 39,
-        EMR_ELLIPSE = 42,
-        EMR_RECTANGLE = 43,
-        EMR_SETMITERLIMIT = 58,
-        EMR_EXTCREATEFONTINDIRECTW = 82,
-        EMR_EXTTEXTOUTW = 84,
-        EMR_EXTCREATEPEN = 95
+        eEMR_HEADER = 1,
+        eEMR_POLYGON = 3,
+        eEMR_POLYLINE = 4,
+        eEMR_EOF = 14,
+        eEMR_SETMAPMODE = 17,
+        eEMR_SETBKMODE = 18,
+        eEMR_SETTEXTALIGN = 22,
+        eEMR_SETTEXTCOLOR = 24,
+        eEMR_SELECTOBJECT = 37,
+        eEMR_CREATEPEN = 38,
+        eEMR_CREATEBRUSHINDIRECT = 39,
+        eEMR_ELLIPSE = 42,
+        eEMR_RECTANGLE = 43,
+        eEMR_SETMITERLIMIT = 58,
+        eEMR_EXTCREATEFONTINDIRECTW = 82,
+        eEMR_EXTTEXTOUTW = 84,
+        eEMR_EXTCREATEPEN = 95
     };
 
     enum EPenStyle {
-        PS_ENDCAP_ROUND  = 0x00000000,
-        PS_JOIN_ROUND    = 0x00000000,
-        PS_SOLID         = 0x00000000,
-        PS_DASH          = 0x00000001,
-        PS_DOT           = 0x00000002,
-        PS_DASHDOT       = 0x00000003,
-        PS_DASHDOTDOT    = 0x00000004,
-        PS_NULL          = 0x00000005,
-        PS_INSIDEFRAME   = 0x00000006,
-        PS_USERSTYLE     = 0x00000007,
-        PS_ALTERNATE     = 0x00000008,
-        PS_ENDCAP_SQUARE = 0x00000100,
-        PS_ENDCAP_FLAT   = 0x00000200,
-        PS_JOIN_BEVEL    = 0x00001000,
-        PS_JOIN_MITER    = 0x00002000,
-        PS_GEOMETRIC     = 0x00010000
+        ePS_ENDCAP_ROUND  = 0x00000000,
+        ePS_JOIN_ROUND    = 0x00000000,
+        ePS_SOLID         = 0x00000000,
+        ePS_DASH          = 0x00000001,
+        ePS_DOT           = 0x00000002,
+        ePS_DASHDOT       = 0x00000003,
+        ePS_DASHDOTDOT    = 0x00000004,
+        ePS_NULL          = 0x00000005,
+        ePS_INSIDEFRAME   = 0x00000006,
+        ePS_USERSTYLE     = 0x00000007,
+        ePS_ALTERNATE     = 0x00000008,
+        ePS_ENDCAP_SQUARE = 0x00000100,
+        ePS_ENDCAP_FLAT   = 0x00000200,
+        ePS_JOIN_BEVEL    = 0x00001000,
+        ePS_JOIN_MITER    = 0x00002000,
+        ePS_GEOMETRIC     = 0x00010000
     };
 
     enum EBrushStyle {
-        BS_SOLID = 0,
-        BS_NULL  = 1
+        eBS_SOLID = 0,
+        eBS_NULL  = 1
     };
     
     enum EFontCharset {
-        DEFAULT_CHARSET = 1,
-        SYMBOL_CHARSET  = 2
+        eDEFAULT_CHARSET = 1,
+        eSYMBOL_CHARSET  = 2
     };
 
     enum EFontOutPrecision {
-        OUT_DEFAULT_PRECIS   = 0,
-        OUT_STRING_PRECIS    = 1,
-        OUT_CHARACTER_PRECIS = 2,
-        OUT_STROKE_PRECIS    = 3
+        eOUT_DEFAULT_PRECIS   = 0,
+        eOUT_STRING_PRECIS    = 1,
+        eOUT_CHARACTER_PRECIS = 2,
+        eOUT_STROKE_PRECIS    = 3
     };
 
     enum EFontClipPrecision {
-        CLIP_DEFAULT_PRECIS    = 0x00,
-        CLIP_CHARACTER_PRECIS  = 0x01,
-        CLIP_STROKE_PRECIS     = 0x02
+        eCLIP_DEFAULT_PRECIS    = 0x00,
+        eCLIP_CHARACTER_PRECIS  = 0x01,
+        eCLIP_STROKE_PRECIS     = 0x02
     };
 
     enum EFontQuality {
-        DEFAULT_QUALITY       = 0,
-        DRAFT_QUALITY         = 1,
-        PROOF_QUALITY         = 2,
-        NONANTIALIASED_QUALITY= 3,
-        ANTIALIASED_QUALITY   = 4,
-        CLEARTYPE_QUALITY     = 5
+        eDEFAULT_QUALITY       = 0,
+        eDRAFT_QUALITY         = 1,
+        ePROOF_QUALITY         = 2,
+        eNONANTIALIASED_QUALITY= 3,
+        eANTIALIASED_QUALITY   = 4,
+        eCLEARTYPE_QUALITY     = 5
     };
 
     enum EFontPitchFamily {
-        DEFAULT_PITCH      = 0x00,
-        FIXED_PITCH        = 0x01,
-        VARIABLE_PITCH     = 0x02,
+        eDEFAULT_PITCH      = 0x00,
+        eFIXED_PITCH        = 0x01,
+        eVARIABLE_PITCH     = 0x02,
 
-        FF_DONTCARE        = 0x00,
-        FF_ROMAN           = 0x10,
-        FF_SWISS           = 0x20,
-        FF_MODERN          = 0x30,
-        FF_SCRIPT          = 0x40,
-        FF_DECORATIVE      = 0x50
+        eFF_DONTCARE        = 0x00,
+        eFF_ROMAN           = 0x10,
+        eFF_SWISS           = 0x20,
+        eFF_MODERN          = 0x30,
+        eFF_SCRIPT          = 0x40,
+        eFF_DECORATIVE      = 0x50
     };
 
     enum ETextAlign {
-        TA_LEFT            = 0x00,
-        TA_TOP             = 0x00,
-        TA_RIGHT           = 0x02,
-        TA_CENTER          = 0x06,
-        TA_BOTTOM          = 0x08,
-        TA_BASELINE        = 0x18
+        eTA_LEFT            = 0x00,
+        eTA_TOP             = 0x00,
+        eTA_RIGHT           = 0x02,
+        eTA_CENTER          = 0x06,
+        eTA_BOTTOM          = 0x08,
+        eTA_BASELINE        = 0x18
     };
 
     enum EBkMode {
-        TRANSPARENT      = 1,
-        OPAQUE           = 2
+        eTRANSPARENT      = 1,
+        eOPAQUE           = 2
     };
 
     enum EMapMode {
-        MM_TEXT		 = 1,
-        MM_LOMETRIC	 = 2,
-        MM_HIMETRIC	 = 3,
-        MM_LOENGLISH	 = 4,
-        MM_HIENGLISH	 = 5,
-        MM_TWIPS	 = 6,
-        MM_ISOTROPIC	 = 7,
-        MM_ANISOTROPIC	 = 8
+        eMM_TEXT         = 1,
+        eMM_LOMETRIC	 = 2,
+        eMM_HIMETRIC	 = 3,
+        eMM_LOENGLISH	 = 4,
+        eMM_HIENGLISH	 = 5,
+        eMM_TWIPS	 = 6,
+        eMM_ISOTROPIC	 = 7,
+        eMM_ANISOTROPIC	 = 8
     };
 
     enum EGraphicsMode {
-        GM_COMPATIBLE    = 1,
-        GM_ADVANCED      = 2
+        eGM_COMPATIBLE    = 1,
+        eGM_ADVANCED      = 2
     };
 
     // ------------------------------------------------------------------------
@@ -232,7 +232,7 @@ namespace EMF {
     struct SRecord {
         const TUInt4 iType;
         TUInt4 nSize;
-        SRecord(unsigned int t) : iType(t) {}
+    SRecord(unsigned int t) : iType(t), nSize(0) {}
     };
 
     struct SHeader : SRecord {
@@ -254,7 +254,7 @@ namespace EMF {
         unsigned int bOpenGL;
         SSize micrometers;
         std::string desc;
-        SHeader(void) : SRecord(EMR_HEADER) {}
+        SHeader(void) : SRecord(eEMR_HEADER) {}
         void Serialize(std::string &o) const {
             o << iType << nSize << bounds << frame << TUInt4(signature) << TUInt4(version) << TUInt4(nBytes) << TUInt4(nRecords) << TUInt2(nHandles) << TUInt2(reserved) << TUInt4(nDescription) << TUInt4(108) << TUInt4(nPalEntries) << device << millimeters << TUInt4(cbPixelFormat) << TUInt4(offPixelFormat) << TUInt4(bOpenGL) << micrometers;
             o.append(desc);
@@ -276,7 +276,7 @@ namespace EMF {
         TFloat4  exScale;
         TFloat4  eyScale;
         SemrText emrtext;
-        S_EXTTEXTOUTW(void) : SRecord(EMR_EXTTEXTOUTW) {}
+        S_EXTTEXTOUTW(void) : SRecord(eEMR_EXTTEXTOUTW) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << bounds << TUInt4(graphicsMode) << exScale << eyScale << emrtext.reference << TUInt4(emrtext.nChars) << TUInt4(19*4) << TUInt4(emrtext.options) << emrtext.rect << TUInt4(emrtext.offDx);
             o.append(emrtext.str);
@@ -309,7 +309,7 @@ namespace EMF {
             return memcmp(p1->styleEntries, p2->styleEntries,
                           p1->elp.numEntries * 4) < 0;
 	}};
-        S_EXTCREATEPEN(void) : SRecord(EMR_EXTCREATEPEN), styleEntries(NULL) {}
+        S_EXTCREATEPEN(void) : SRecord(eEMR_EXTCREATEPEN), styleEntries(NULL) {}
         ~S_EXTCREATEPEN(void) { delete[] styleEntries; }
 	void Serialize(std::string &o) const {
             o << iType << nSize << TUInt4(ihPen) << offBmi << cbBmi << offBits << cbBits << TUInt4(elp.penStyle) << elp.width << elp.brushStyle << elp.color << elp.brushHatch << TUInt4(elp.numEntries);
@@ -331,7 +331,7 @@ namespace EMF {
 	friend bool operator<(const SBrush &a, const SBrush &b) {
 	    return memcmp(&a.lb, &b.lb, sizeof(a.lb)) < 0;
 	}
-	SBrush(void) : SRecord(EMR_CREATEBRUSHINDIRECT) {}
+	SBrush(void) : SRecord(eEMR_CREATEBRUSHINDIRECT) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << TUInt4(ihBrush) << lb.brushStyle << lb.color << lb.brushHatch;
 	}
@@ -357,6 +357,7 @@ namespace EMF {
         TUInt1  pitchAndFamily;
         char    faceName[64]; // <=32 UTF-16 characters
         void SetFace(const std::string &utf16) {
+            memset(faceName, 0, 64);//blank out for comparison
             memcpy(faceName, utf16.data(),
                    64 < utf16.length() ? 64 : utf16.length());
         }
@@ -368,7 +369,7 @@ namespace EMF {
 	friend bool operator<(const SFont &f1, const SFont &f2) {
 	    return memcmp(&f1.lf, &f2.lf, sizeof(f1.lf)) < 0;
 	}
-	SFont(void) : SRecord(EMR_EXTCREATEFONTINDIRECTW) {
+	SFont(void) : SRecord(eEMR_EXTCREATEFONTINDIRECTW) {
             memset(&lf, '\0', sizeof(lf));
         }
 	void Serialize(std::string &o) const {
@@ -387,7 +388,7 @@ namespace EMF {
         SPoint *points;
         SPoly(int iType, int n, double *x, double *y) :
             SRecord(iType), points(new SPoint[n]) {
-            bounds.Set(x[0],y[0],x[0],y[0]);
+            bounds.Set(lround(x[0]),lround(y[0]),lround(x[0]),lround(y[0]));
             count = n;
             for (int i = 0;  i < n;  ++i) {
                 points[i].Set(lround(x[i]), lround(y[i]));
@@ -408,7 +409,7 @@ namespace EMF {
 
     struct S_SETTEXTALIGN : SRecord {
         TUInt4 mode;
-        S_SETTEXTALIGN(void) : SRecord(EMR_SETTEXTALIGN) {}
+        S_SETTEXTALIGN(void) : SRecord(eEMR_SETTEXTALIGN) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << mode;
         }
@@ -416,7 +417,7 @@ namespace EMF {
 
     struct S_SETTEXTCOLOR : SRecord {
         SColorRef color;
-        S_SETTEXTCOLOR(void) : SRecord(EMR_SETTEXTCOLOR) {}
+        S_SETTEXTCOLOR(void) : SRecord(eEMR_SETTEXTCOLOR) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << color;
         }
@@ -424,7 +425,7 @@ namespace EMF {
 
     struct S_SELECTOBJECT : SRecord {
         TUInt4 ihObject;
-        S_SELECTOBJECT(void) : SRecord(EMR_SELECTOBJECT) {}
+        S_SELECTOBJECT(void) : SRecord(eEMR_SELECTOBJECT) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << ihObject;
         }
@@ -432,7 +433,7 @@ namespace EMF {
 
     struct S_SETBKMODE : SRecord {
         TUInt4 mode;
-        S_SETBKMODE(void) : SRecord(EMR_SETBKMODE) {}
+        S_SETBKMODE(void) : SRecord(eEMR_SETBKMODE) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << mode;
         }
@@ -440,7 +441,7 @@ namespace EMF {
 
     struct S_SETMAPMODE : SRecord {
         TUInt4 mode;
-        S_SETMAPMODE(void) : SRecord(EMR_SETMAPMODE) {}
+        S_SETMAPMODE(void) : SRecord(eEMR_SETMAPMODE) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << mode;
         }
@@ -448,7 +449,7 @@ namespace EMF {
 
     struct S_SETMITERLIMIT : SRecord {
         TUInt4 miterLimit;
-        S_SETMITERLIMIT(void) : SRecord(EMR_SETMITERLIMIT) {}
+        S_SETMITERLIMIT(void) : SRecord(eEMR_SETMITERLIMIT) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << miterLimit;
         }
@@ -458,7 +459,7 @@ namespace EMF {
         TUInt4 nPalEntries;
         TUInt4 offPalEntries;
         TUInt4 nSizeLast;
-        S_EOF(void) : SRecord(EMR_EOF) {}
+        S_EOF(void) : SRecord(eEMR_EOF) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << nPalEntries << offPalEntries << nSizeLast;
         }
@@ -466,7 +467,7 @@ namespace EMF {
 
     struct S_RECTANGLE : SRecord {
         SRect box;
-        S_RECTANGLE(void) : SRecord(EMR_RECTANGLE) {}
+        S_RECTANGLE(void) : SRecord(eEMR_RECTANGLE) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << box;
         }
@@ -474,7 +475,7 @@ namespace EMF {
 
     struct S_ELLIPSE : SRecord {
         SRect box;
-        S_ELLIPSE(void) : SRecord(EMR_ELLIPSE) {}
+        S_ELLIPSE(void) : SRecord(eEMR_ELLIPSE) {}
 	void Serialize(std::string &o) const {
             o << iType << nSize << box;
         }

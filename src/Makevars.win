@@ -1,1 +1,1 @@
-PKG_LIBS = -lRzlib
+PKG_LIBS = -lgdi32

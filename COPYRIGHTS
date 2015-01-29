@@ -1,7 +1,0 @@
-This package contains the following previously-copyrighted code, as
-declared at the top of the ps_fonts.h source file:
-
-(From the R grDevices core library)
-src/ps_fonts.h: * Copyright (C) 1995, 1996  Robert Gentleman and Ross Ihaka
-                * Copyright (C) 1998--2010  Robert Gentleman, Ross Ihaka and the
-                *                           R Development Core Team

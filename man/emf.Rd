@@ -42,10 +42,9 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   system that you use to import/view the resulting file.  Sticking to
   the standard Adobe PostScript font families is probably a good idea.
 
-  EMF has full Unicode character support, and this package tries to
-  maintain full support as well.  However, the font metric information
-  is \emph{clunkily} borrowed from the R postscript device and will not
-  to work properly for non-Latin character sets.
+  EMF supports Unicode characters, and this package tries to maintain
+  support as well.  However, font metric information is system dependent
+  and so support may be spotty in practice.
 
   The EMF format itself does not allow for partial transparency (i.e.,
   the only useful type -- 0.0 < alpha < 1.0); attempting to use a
@@ -55,11 +54,6 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   EMF-level clipping is not yet implemented, since R \emph{appears} to
   take care of this; however, if you see a problem that could be the
   result a clipping bug, please contact the author.
-}
-\note{
-  This package copies the postscript font metric code from the R core
-  grDevices library and uses the AFM files installed with that library.
-  Thanks to the R core development team for writing this code.
 }
 \author{
   Philip Johnson
