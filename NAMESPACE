@@ -1,3 +1,2 @@
-importFrom(grDevices, ps.options)
 useDynLib(devEMF, .registration = TRUE)
 export(emf)

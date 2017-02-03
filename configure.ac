@@ -35,10 +35,38 @@ if test `uname -s` != "Darwin"; then #only necessary if NOT on OSX
    AC_MSG_NOTICE([XFT_CFLAGS=${XFT_CFLAGS}])
    AC_MSG_NOTICE([XFT_LIBS=${XFT_LIBS}])
 
-   CPPFLAGS="${XFT_CFLAGS}"
-   LIBS="${XFT_LIBS}"
 
-   AC_CHECK_HEADER(X11/Xft/Xft.h,,AC_MSG_ERROR([Cannot find Xft.h! Please install the Xft development headers and/or set XFT_CFLAGS/LIBS correspondingly.]))
+   if test "xx$Z_LIBS" == "xx"; then
+      if test "xx$PKGCONF" != "xx"; then
+         AC_MSG_CHECKING([whether pkg-config knows about zlib])
+         if "${PKGCONF}" --exists zlib; then
+            AC_MSG_RESULT([yes])
+            ZLIB_CFLAGS=`"${PKGCONF}" --cflags zlib`
+            ZLIB_LIBS=`"${PKGCONF}" --libs zlib`
+         else
+            AC_MSG_RESULT([no])
+         fi
+      fi
+   fi
+
+
+   CPPFLAGS="${XFT_CFLAGS} ${ZLIB_CFLAGS}"
+   LIBS="${XFT_LIBS} ${ZLIB_LIBS}"
+
+   AC_CHECK_HEADERS_ONCE(X11/Xft/Xft.h)
+   AC_CHECK_HEADERS_ONCE(zlib.h)
+
+   if (test "x$ac_cv_header_zlib_h" == xyes); then
+      CPPFLAGS="${CPPFLAGS} -DHAVE_ZLIB"
+   fi
+   if (test "x$ac_cv_header_X11_Xft_Xft_h" == xyes); then
+      CPPFLAGS="${CPPFLAGS} -DHAVE_XFT"
+   fi
+
+   if test "x$ac_cv_header_zlib_h" == xno  &&  test "x$ac_cv_header_X11_Xft_Xft_h" == xno; then
+      AC_MSG_ERROR([Cannot find Xft.h or zlib.h! Please install the Xft or Zlib development headers and/or set XFT_CFLAGS/LIBS or ZLIB_CFLAGS/LIBS correspondingly.])
+   fi
+
 fi
 
 AC_CONFIG_FILES([src/Makevars])

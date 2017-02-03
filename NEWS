@@ -1,3 +1,26 @@
+v3.2 -- 19 Sept 2016
+  -add raster image support
+  -embed devEMF version number in EMF output (in a comment field)
+  -rework text output to use world transformations
+  -bug fixes related to path rendering
+  -eliminate compiler errors on Solaris C++98 compiler
+
+v3.1 -- 17 Mar 2016
+  -add back ability to use Adobe font metric (AFM) files, in case no
+   graphical interface (Xft, Windows, Apple) is available to query.
+   Adobe distributes AFMs for the 14 core PDF fonts, and these are now
+   included in the devEMF package (note before v2.0, devEMF accessed
+   the AFMs included in the grDevices package).  To keep this package
+   size managable, the AFMs are gzipped, so using this ability
+   requires zlib.
+  -add support for path rendering
+
+v3.0 -- 3 Apr 2015
+  -add support for EMF+ output.  This format has less complete support
+   in client programs but allows for partial transparency.  EMF+
+   output is now the default, but the pure EMF output is still
+   possible with an option to the "emf()" call that opens the device.
+
 v2.0 -- 29 Jan 2015
   -switch to platform-specific font metric code instead of accessing
    the AFM files supplied with core R via a non-public R API (this

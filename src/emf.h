@@ -1,4 +1,4 @@
-/* $Id: emf.h 306 2015-01-29 18:45:54Z pjohnson $
+/* $Id: emf.h 334 2017-02-03 17:01:03Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -25,8 +25,27 @@
     --------------------------------------------------------------------------
 */
 
-#include <cassert>
+#ifndef EMF__H
+#define EMF__H
+
+#include <stdexcept>
 #include <string>
+#include <vector>
+#include <math.h>
+
+namespace EMF {
+    struct ofstream : std::ofstream {
+        bool inEMFplus;
+        unsigned int nRecords;
+        std::streampos emfPlusStartPos;
+        ofstream(void) : std::ofstream() { inEMFplus = false; nRecords = 0;}
+    };
+}
+
+//forward declaration from emf+.h
+namespace EMFPLUS {
+    void GetDC(EMF::ofstream &o);
+}
 
 // structs for EMF
 namespace EMF {
@@ -34,20 +53,31 @@ namespace EMF {
         eEMR_HEADER = 1,
         eEMR_POLYGON = 3,
         eEMR_POLYLINE = 4,
+        eEMR_SETBRUSHORGEX = 13,
         eEMR_EOF = 14,
         eEMR_SETMAPMODE = 17,
         eEMR_SETBKMODE = 18,
+        eEMR_SETPOLYFILLMODE = 19,
+        eEMR_SETSTRETCHBLTMODE = 21,
         eEMR_SETTEXTALIGN = 22,
         eEMR_SETTEXTCOLOR = 24,
+        eEMR_SAVEDC = 33,
+        eEMR_RESTOREDC = 34,
+        eEMR_SETWORLDTRANSFORM = 35,
+        eEMR_MODIFYWORLDTRANSFORM = 36,
         eEMR_SELECTOBJECT = 37,
         eEMR_CREATEPEN = 38,
         eEMR_CREATEBRUSHINDIRECT = 39,
         eEMR_ELLIPSE = 42,
         eEMR_RECTANGLE = 43,
         eEMR_SETMITERLIMIT = 58,
+        eEMR_COMMENT = 70,
+        eEMR_STRETCHBLT = 77,
+        eEMR_STRETCHDIBITS = 81,
         eEMR_EXTCREATEFONTINDIRECTW = 82,
         eEMR_EXTTEXTOUTW = 84,
-        eEMR_EXTCREATEPEN = 95
+        eEMR_EXTCREATEPEN = 95,
+        eEMR_last = 255 //placeholder for max value
     };
 
     enum EPenStyle {
@@ -75,6 +105,7 @@ namespace EMF {
     };
     
     enum EFontCharset {
+        eANSI_CHARSET = 0,
         eDEFAULT_CHARSET = 1,
         eSYMBOL_CHARSET  = 2
     };
@@ -83,7 +114,8 @@ namespace EMF {
         eOUT_DEFAULT_PRECIS   = 0,
         eOUT_STRING_PRECIS    = 1,
         eOUT_CHARACTER_PRECIS = 2,
-        eOUT_STROKE_PRECIS    = 3
+        eOUT_STROKE_PRECIS    = 3,
+        eOUT_TT_PRECIS        = 4
     };
 
     enum EFontClipPrecision {
@@ -123,9 +155,18 @@ namespace EMF {
         eTA_BASELINE        = 0x18
     };
 
+    enum ETextOptions {
+        eETO_NO_RECT        = 0x100
+    };
+
     enum EBkMode {
         eTRANSPARENT      = 1,
         eOPAQUE           = 2
+    };
+
+    enum EPolyFillMode {
+        ePF_ALTERNATE      = 1,
+        ePF_WINDING        = 2
     };
 
     enum EMapMode {
@@ -144,6 +185,13 @@ namespace EMF {
         eGM_ADVANCED      = 2
     };
 
+    enum EModifyWorldTransformMode {
+        eMWT_IDENTITY        = 1,
+        eMWT_LEFTMULTIPLY    = 2,
+        eMWT_RIGHTMULTIPLY   = 3,
+        eMWT_SET             = 4
+    };
+
     // ------------------------------------------------------------------------
     // Generic objects for specified bytes of little-endian data storage
 
@@ -152,7 +200,12 @@ namespace EMF {
         char m_Val[nBytes];
 
         CLEType(void) {}
-        CLEType(TType v) { assert(sizeof(v) >= nBytes); *this = v; }
+        CLEType(TType v) {
+            if (sizeof(v) < nBytes) {
+                throw std::logic_error("sizeof(v) < nBytes");
+            }
+            *this = v;
+        }
         CLEType& operator= (TType v) {
             //store as little-endian
             unsigned char *ch = reinterpret_cast<unsigned char*>(&v);
@@ -226,14 +279,44 @@ namespace EMF {
         }
     };
 
+    struct SXForm {
+        TFloat4 m[2][2];
+        TFloat4 d[2];
+        void Set(double m11, double m12, double m21, double m22,
+                 double dx, double dy) {
+            m[0][0]=m11; m[0][1]=m12; m[1][0]=m21; m[1][1]=m22;
+            d[0] = dx; d[1] = dy;
+        }
+        friend std::string& operator<< (std::string &o, const SXForm &x) {
+            return o << x.m[0][0] << x.m[0][1] << x.m[1][0] << x.m[1][1]
+                     << x.d[0] << x.d[1];
+        }
+    };
+
     // ------------------------------------------------------------------------
     // EMF Records + EMF objects used in only one record begin here
 
     struct SRecord {
-        const TUInt4 iType;
+        ERecordType iType;
         TUInt4 nSize;
-    SRecord(unsigned int t) : iType(t), nSize(0) {}
-    };
+        SRecord(ERecordType t) : iType(t), nSize(0) {}
+
+        virtual std::string& Serialize(std::string &o) const {
+            return o << TUInt4(iType) << nSize;
+        }
+        void Write(EMF::ofstream &o) {
+            if (o.inEMFplus) {
+                EMFPLUS::GetDC(o); // emf+ record to enable reading of emf
+                o.inEMFplus = false;
+            }
+            ++o.nRecords;
+            std::string buff; Serialize(buff);
+            buff.resize(((buff.size() + 3)/4)*4, '\0'); //add padding
+            std::string nSize; nSize << TUInt4(buff.size());
+            buff.replace(4,4, nSize);
+            o.write(buff.data(), buff.size());
+        }
+};
 
     struct SHeader : SRecord {
         SRect bounds;
@@ -255,9 +338,19 @@ namespace EMF {
         SSize micrometers;
         std::string desc;
         SHeader(void) : SRecord(eEMR_HEADER) {}
-        void Serialize(std::string &o) const {
-            o << iType << nSize << bounds << frame << TUInt4(signature) << TUInt4(version) << TUInt4(nBytes) << TUInt4(nRecords) << TUInt2(nHandles) << TUInt2(reserved) << TUInt4(nDescription) << TUInt4(108) << TUInt4(nPalEntries) << device << millimeters << TUInt4(cbPixelFormat) << TUInt4(offPixelFormat) << TUInt4(bOpenGL) << micrometers;
+        std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << bounds << frame << TUInt4(signature) << TUInt4(version) << TUInt4(nBytes) << TUInt4(nRecords) << TUInt2(nHandles) << TUInt2(reserved) << TUInt4(nDescription) << TUInt4(108) << TUInt4(nPalEntries) << device << millimeters << TUInt4(cbPixelFormat) << TUInt4(offPixelFormat) << TUInt4(bOpenGL) << micrometers;
             o.append(desc);
+            return o;
+        }
+    };
+
+    struct SPlusRecord : SRecord {
+        SPlusRecord(void) : SRecord(eEMR_COMMENT) {}
+        std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << nSize;
+            o.append("EMF+", 4);
+            return o;
         }
     };
 
@@ -277,10 +370,23 @@ namespace EMF {
         TFloat4  eyScale;
         SemrText emrtext;
         S_EXTTEXTOUTW(void) : SRecord(eEMR_EXTTEXTOUTW) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << bounds << TUInt4(graphicsMode) << exScale << eyScale << emrtext.reference << TUInt4(emrtext.nChars) << TUInt4(19*4) << TUInt4(emrtext.options) << emrtext.rect << TUInt4(emrtext.offDx);
+        std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << bounds << TUInt4(graphicsMode) << exScale << eyScale << emrtext.reference << TUInt4(emrtext.nChars) <<
+                TUInt4(19*4) << //offset for string
+                TUInt4(emrtext.options) << emrtext.rect <<
+                TUInt4(emrtext.offDx);
             o.append(emrtext.str);
+            return o;
 	}
+    };
+
+    struct SObject : SRecord {
+        unsigned int m_ObjId;
+        SObject(ERecordType t) : SRecord(t) {}
+        virtual ~SObject(void) {}
+        std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << TUInt4(m_ObjId);
+        }
     };
 
     struct SLogPenEx {
@@ -291,31 +397,77 @@ namespace EMF {
         TUInt4 brushHatch;
         unsigned int numEntries;
     };
-    struct S_EXTCREATEPEN : SRecord {
-        unsigned int ihPen;
+    struct SPen : SObject {
         TUInt4 offBmi;
         TUInt4 cbBmi;
         TUInt4 offBits;
         TUInt4 cbBits;
         SLogPenEx elp;
-        TUInt4 *styleEntries;
+        std::vector<TUInt4> styleEntries;
 
-        class Less { public: bool operator()(const S_EXTCREATEPEN *p1,
-                                             const S_EXTCREATEPEN *p2) const {
-	    int res = memcmp(&p1->elp, &p2->elp, sizeof(p1->elp));
-            if (res != 0) return res < 0;
-            if (p1->elp.numEntries < p2->elp.numEntries) return true;
-            if (p1->elp.numEntries > p2->elp.numEntries) return false;
-            return memcmp(p1->styleEntries, p2->styleEntries,
-                          p1->elp.numEntries * 4) < 0;
-	}};
-        S_EXTCREATEPEN(void) : SRecord(eEMR_EXTCREATEPEN), styleEntries(NULL) {}
-        ~S_EXTCREATEPEN(void) { delete[] styleEntries; }
-	void Serialize(std::string &o) const {
-            o << iType << nSize << TUInt4(ihPen) << offBmi << cbBmi << offBits << cbBits << TUInt4(elp.penStyle) << elp.width << elp.brushStyle << elp.color << elp.brushHatch << TUInt4(elp.numEntries);
-            for (unsigned int i = 0;  i < elp.numEntries;  ++i) {
+        SPen(unsigned int col, double lwd, unsigned int lty,
+             unsigned int lend, unsigned int ljoin,
+             double ps2dev, bool useUserLty) : SObject(eEMR_EXTCREATEPEN) {
+            offBmi = cbBmi = offBits = cbBits = 0;
+            elp.penStyle = ePS_GEOMETRIC;
+            elp.width = lwd*ps2dev;
+            elp.brushStyle = eBS_SOLID;
+            elp.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
+            if (R_ALPHA(col) > 0  &&  R_ALPHA(col) < 255) {
+                Rf_warning("partial transparency is not supported for EMF "
+                           "lines (consider enabling EMF+)");
+            }
+            elp.brushHatch = 0;
+            elp.numEntries = 0;
+            if (R_TRANSPARENT(col)) {
+                elp.penStyle |= ePS_NULL;
+                elp.brushStyle = eBS_NULL;
+                return;
+            }
+            if (!useUserLty) {
+                // if not using EMF custom line types, then map
+                // between vaguely equivalent default line types
+                switch(lty) {
+                case LTY_SOLID: elp.penStyle |= ePS_SOLID; break;
+                case LTY_DASHED: elp.penStyle |= ePS_DASH; break;
+                case LTY_DOTTED: elp.penStyle |= ePS_DOT; break;
+                case LTY_DOTDASH: elp.penStyle |= ePS_DASHDOT; break;
+                case LTY_LONGDASH: elp.penStyle |= ePS_DASHDOTDOT; break;
+                default: elp.penStyle |= ePS_SOLID;
+                    Rf_warning("Using lty unsupported by EMF device");
+                }
+            } else { //custom line style is preferable
+                for(int i = 0;  i < 8  &&  lty & 15;  ++i, lty >>= 4) {
+                    styleEntries.push_back((lty & 15)*ps2dev);
+                }
+                if (styleEntries.empty()) {
+                    elp.penStyle |= ePS_SOLID;
+                } else {
+                    elp.penStyle |= ePS_USERSTYLE;
+                }
+            }
+
+            switch (lend) {
+            case GE_ROUND_CAP: elp.penStyle |= ePS_ENDCAP_ROUND; break;
+            case GE_BUTT_CAP: elp.penStyle |= ePS_ENDCAP_FLAT; break;
+            case GE_SQUARE_CAP: elp.penStyle |= ePS_ENDCAP_SQUARE; break;
+            default: break;//actually of range, but R doesn't complain..
+            }
+
+            switch (ljoin) {
+            case GE_ROUND_JOIN: elp.penStyle |= ePS_JOIN_ROUND; break;
+            case GE_MITRE_JOIN: elp.penStyle |= ePS_JOIN_MITER; break;
+            case GE_BEVEL_JOIN: elp.penStyle |= ePS_JOIN_BEVEL; break;
+            default: break;//actually of range, but R doesn't complain..
+            }
+        }
+
+        std::string& Serialize(std::string &o) const {
+            SObject::Serialize(o) << offBmi << cbBmi << offBits << cbBits << TUInt4(elp.penStyle) << elp.width << elp.brushStyle << elp.color << elp.brushHatch << TUInt4(styleEntries.size());
+            for (unsigned int i = 0;  i < styleEntries.size();  ++i) {
                 o << styleEntries[i];
             }
+            return o;
 	}
     };
 
@@ -324,16 +476,20 @@ namespace EMF {
         SColorRef color;
         TUInt4    brushHatch;
     };
-    struct SBrush : SRecord {
-        unsigned int ihBrush;
+    struct SBrush : SObject {
         SLogBrushEx  lb;
 
-	friend bool operator<(const SBrush &a, const SBrush &b) {
-	    return memcmp(&a.lb, &b.lb, sizeof(a.lb)) < 0;
-	}
-	SBrush(void) : SRecord(eEMR_CREATEBRUSHINDIRECT) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << TUInt4(ihBrush) << lb.brushStyle << lb.color << lb.brushHatch;
+	SBrush(unsigned int col) : SObject(eEMR_CREATEBRUSHINDIRECT) {
+            lb.brushStyle = (R_TRANSPARENT(col) ? eBS_NULL : eBS_SOLID);
+            lb.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
+            lb.brushHatch = 0; //unused with BS_SOLID or BS_NULL
+            if (R_ALPHA(col) > 0  &&  R_ALPHA(col) < 255) {
+                Rf_warning("partial transparency is not supported for EMF "
+                           "fills (consider enabling EMF+)");
+            }
+        }
+        std::string& Serialize(std::string &o) const {
+            return SObject::Serialize(o) << lb.brushStyle << lb.color << lb.brushHatch;
 	}
     };
 
@@ -362,23 +518,36 @@ namespace EMF {
                    64 < utf16.length() ? 64 : utf16.length());
         }
     };
-    struct SFont : SRecord {
-        unsigned int ihFont;
+    struct SFont : SObject {
+        SSysFontInfo *m_SysFontInfo;
         SLogFont lf;
         
-	friend bool operator<(const SFont &f1, const SFont &f2) {
-	    return memcmp(&f1.lf, &f2.lf, sizeof(f1.lf)) < 0;
-	}
-	SFont(void) : SRecord(eEMR_EXTCREATEFONTINDIRECTW) {
-            memset(&lf, '\0', sizeof(lf));
+	SFont(unsigned char face, int size, const std::string &familyUTF16) :
+            SObject(eEMR_EXTCREATEFONTINDIRECTW),m_SysFontInfo(NULL) {
+            lf.height = -size;//(-) matches against *character* height
+            lf.width = 0;
+            lf.escapement = 0;
+            lf.orientation = 0;
+            lf.weight = (face == 2  ||  face == 4) ?
+                eFontWeight_bold : eFontWeight_normal;
+            lf.italic = (face == 3  ||  face == 4) ? 1 : 0;
+            lf.underline = 0;
+            lf.strikeOut = 0;
+            lf.charSet = eDEFAULT_CHARSET;
+            lf.outPrecision = eOUT_STROKE_PRECIS;
+            lf.clipPrecision = eCLIP_DEFAULT_PRECIS;
+            lf.quality = eANTIALIASED_QUALITY;
+            lf.pitchAndFamily = eFF_DONTCARE + eDEFAULT_PITCH;
+            lf.SetFace(familyUTF16);
         }
-	void Serialize(std::string &o) const {
-            o << iType << nSize << TUInt4(ihFont) << lf.height << lf.width
+        std::string& Serialize(std::string &o) const {
+            SObject::Serialize(o) << lf.height << lf.width
               << lf.escapement << lf.orientation << lf.weight
               << lf.italic << lf.underline << lf.strikeOut
               << lf.charSet << lf.outPrecision << lf.clipPrecision
               << lf.quality << lf.pitchAndFamily;
             o.append(lf.faceName, 64);
+            return o;
 	}
     };
 
@@ -386,12 +555,13 @@ namespace EMF {
         SRect  bounds;
         unsigned int count;
         SPoint *points;
-        SPoly(int iType, int n, double *x, double *y) :
-            SRecord(iType), points(new SPoint[n]) {
-            bounds.Set(lround(x[0]),lround(y[0]),lround(x[0]),lround(y[0]));
+        SPoly(ERecordType iType, int n, double *x, double *y) :
+        SRecord(iType), points(new SPoint[n]) {
+            bounds.Set((int) floor(x[0] + 0.5), (int) floor(y[0] + 0.5),
+                       (int) floor(x[0] + 0.5), (int) floor(y[0] + 0.5));
             count = n;
             for (int i = 0;  i < n;  ++i) {
-                points[i].Set(lround(x[i]), lround(y[i]));
+                points[i].Set((int) floor(x[i] + 0.5), (int) floor(y[i] + 0.5));
                 if (points[i].x < bounds.left)   { bounds.left = points[i].x; }
                 if (points[i].x > bounds.right)  { bounds.right = points[i].x; }
                 if (points[i].y < bounds.bottom) { bounds.bottom = points[i].y;}
@@ -399,59 +569,101 @@ namespace EMF {
             }
         }
         ~SPoly(void) { delete[] points; }
-	void Serialize(std::string &o) const {
-            o << iType << nSize << bounds << TUInt4(count);
+        std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << bounds << TUInt4(count);
             for (unsigned int i = 0;  i < count;  ++i) {
                 o << points[i];
             }
+            return o;
 	}
     };
 
     struct S_SETTEXTALIGN : SRecord {
         TUInt4 mode;
         S_SETTEXTALIGN(void) : SRecord(eEMR_SETTEXTALIGN) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << mode;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << mode;
         }
     };
 
     struct S_SETTEXTCOLOR : SRecord {
         SColorRef color;
         S_SETTEXTCOLOR(void) : SRecord(eEMR_SETTEXTCOLOR) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << color;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << color;
+        }
+    };
+
+    struct S_SAVEDC : SRecord {
+        S_SAVEDC(void) : SRecord(eEMR_SAVEDC) {}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o);
+        }
+    };
+
+    struct S_RESTOREDC : SRecord {
+        TInt4 which;
+        S_RESTOREDC(int w=-1) : SRecord(eEMR_RESTOREDC) {which=w;}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << which;
+        }
+    };
+
+    struct S_SETWORLDTRANSFORM : SRecord {
+        SXForm xform;
+        S_SETWORLDTRANSFORM(void) : SRecord(eEMR_SETWORLDTRANSFORM) {}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << xform;
+        }
+    };
+
+    struct S_MODIFYWORLDTRANSFORM : SRecord {
+        SXForm xform;
+        TUInt4 mode;
+        S_MODIFYWORLDTRANSFORM(EModifyWorldTransformMode mwtm) :
+        SRecord(eEMR_MODIFYWORLDTRANSFORM) { mode = mwtm;}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << xform << mode;
         }
     };
 
     struct S_SELECTOBJECT : SRecord {
         TUInt4 ihObject;
         S_SELECTOBJECT(void) : SRecord(eEMR_SELECTOBJECT) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << ihObject;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << ihObject;
         }
     };
 
     struct S_SETBKMODE : SRecord {
         TUInt4 mode;
         S_SETBKMODE(void) : SRecord(eEMR_SETBKMODE) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << mode;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << mode;
+        }
+    };
+
+    struct S_SETPOLYFILLMODE : SRecord {
+        TUInt4 mode;
+        S_SETPOLYFILLMODE(void) : SRecord(eEMR_SETPOLYFILLMODE) {}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << mode;
         }
     };
 
     struct S_SETMAPMODE : SRecord {
         TUInt4 mode;
         S_SETMAPMODE(void) : SRecord(eEMR_SETMAPMODE) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << mode;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << mode;
         }
     };
 
     struct S_SETMITERLIMIT : SRecord {
         TUInt4 miterLimit;
         S_SETMITERLIMIT(void) : SRecord(eEMR_SETMITERLIMIT) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << miterLimit;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << miterLimit;
         }
     };
 
@@ -460,25 +672,314 @@ namespace EMF {
         TUInt4 offPalEntries;
         TUInt4 nSizeLast;
         S_EOF(void) : SRecord(eEMR_EOF) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << nPalEntries << offPalEntries << nSizeLast;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << nPalEntries << offPalEntries
+                                         << nSizeLast;
         }
     };
 
     struct S_RECTANGLE : SRecord {
         SRect box;
         S_RECTANGLE(void) : SRecord(eEMR_RECTANGLE) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << box;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << box;
         }
     };
 
     struct S_ELLIPSE : SRecord {
         SRect box;
         S_ELLIPSE(void) : SRecord(eEMR_ELLIPSE) {}
-	void Serialize(std::string &o) const {
-            o << iType << nSize << box;
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << box;
         }
     };
 
+    struct S_SETSTRETCHBLTMODE : SRecord {
+        TUInt4 mode;
+        S_SETSTRETCHBLTMODE(int m) : SRecord(eEMR_SETSTRETCHBLTMODE) {
+            mode = m;
+        }
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << mode;
+        }
+    };
+
+    struct S_SETBRUSHORGEX : SRecord {
+        SPoint origin;
+    S_SETBRUSHORGEX(int x, int y) : SRecord(eEMR_SETBRUSHORGEX) {
+            origin.Set(x,y);
+        }
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << origin;
+        }
+    };
+
+    struct S_STRETCHDIBITS : SRecord {
+        struct SBitmapHeader {
+            TUInt4 size;
+            TInt4 width, height;
+            TUInt2 planes;
+            TUInt2 bitCount;
+            TUInt4 compression;
+            TUInt4 imageSize;
+            TInt4 xPelsPerMeter;
+            TInt4 yPelsPerMeter;
+            TUInt4 colorUsed;
+            TUInt4 colorImportant;
+        };
+        SRect bounds;
+        TInt4 xDest, yDest;
+        TInt4 xSrc, ySrc;
+        TInt4 cxSrc, cySrc;
+        int offBmiSrc, cbBmiSrc;
+        int offBitsSrc, cbBitsSrc;
+        TUInt4 usageSrc;
+        TUInt4 bitBltRasterOp;
+        TInt4 cxDest,cyDest;
+        SBitmapHeader bmpHead;
+        std::string bmpData;
+        S_STRETCHDIBITS(unsigned int *data,
+                        unsigned int srcW, unsigned int srcH,
+                        double x, double y, double w, double h) :
+            SRecord(eEMR_STRETCHDIBITS) {
+            bounds.Set(x,x+w,y,y+h);
+            xDest = x;
+            yDest = y;
+            xSrc = ySrc = 0;
+            cxSrc = srcW;
+            cySrc = srcH;
+            offBmiSrc = 20*4;//offset(S_STRETCHDIBITS,bmp)
+            cbBmiSrc = 10*4; //size of bitmap header
+            offBitsSrc = offBmiSrc + cbBmiSrc;
+            cbBitsSrc = srcW*srcH*4;//size of bitmap
+            usageSrc = 0; // DIB_RGB_COLORS
+            bitBltRasterOp = 0xCC0020; //SRCCOPY
+            cxDest = w;
+            cyDest = h;
+            bmpHead.size = cbBmiSrc;
+            bmpHead.width = srcW;
+            bmpHead.height = -srcH;
+            bmpHead.planes = 1;
+            bmpHead.bitCount = 0x20;
+            bmpHead.compression = 0;//BI_RGB
+            bmpHead.imageSize = 0; //ignored for BI_RGB
+            bmpHead.xPelsPerMeter = 1; //arb?
+            bmpHead.yPelsPerMeter = 1;
+            bmpHead.colorUsed = 0;
+            bmpHead.colorImportant = 0;
+            bmpData.resize(srcW*srcH*4);
+            for (unsigned int i = 0;  i < srcW*srcH; ++i) {
+                bmpData[4*i+0] = R_BLUE(data[i]);
+                bmpData[4*i+1] = R_GREEN(data[i]);
+                bmpData[4*i+2] = R_RED(data[i]);
+                bmpData[4*i+3] = R_ALPHA(data[i]);
+            }
+        }
+	std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << bounds << xDest << yDest <<
+                xSrc << ySrc << cxSrc << cySrc << TUInt4(offBmiSrc) <<
+                TUInt4(cbBmiSrc) << TUInt4(offBitsSrc) << TUInt4(cbBitsSrc) <<
+                usageSrc << bitBltRasterOp << cxDest << cyDest <<
+                bmpHead.size << bmpHead.width << bmpHead.height <<
+                bmpHead.planes << bmpHead.bitCount << bmpHead.compression <<
+                bmpHead.imageSize << bmpHead.xPelsPerMeter <<
+                bmpHead.yPelsPerMeter << bmpHead.colorUsed <<
+                bmpHead.colorImportant;
+            o.append(bmpData);
+            return o;
+        }
+    };
+
+    struct S_STRETCHBLT : SRecord {
+        struct SBitmapHeader {
+            TUInt4 size;
+            TInt4 width, height;
+            TUInt2 planes;
+            TUInt2 bitCount;
+            TUInt4 compression;
+            TUInt4 imageSize;
+            TInt4 xPelsPerMeter;
+            TInt4 yPelsPerMeter;
+            TUInt4 colorUsed;
+            TUInt4 colorImportant;
+        };
+        SRect bounds;
+        TInt4 xDest, yDest;
+        TInt4 cxDest,cyDest;
+        TUInt4 bitBltRasterOp;
+        TInt4 xSrc, ySrc;
+        SXForm xformSrc; //not in stretchdibits
+        SColorRef bkColorSrc; //not in stretchdibits
+        TUInt4 usageSrc;
+        int offBmiSrc, cbBmiSrc;
+        int offBitsSrc, cbBitsSrc;
+        TInt4 cxSrc, cySrc;
+        SBitmapHeader bmpHead;
+        std::string bmpData;
+        S_STRETCHBLT(unsigned int *data, unsigned int srcW, unsigned int srcH,
+                     double x, double y, double w, double h) :
+            SRecord(eEMR_STRETCHBLT) {
+            bounds.Set(x,x+w,y,y+h);
+            xDest = x;
+            yDest = y;
+            xSrc = ySrc = 0;
+            cxSrc = srcW;
+            cySrc = srcH;
+            offBmiSrc = 27*4;//offset(S_STRETCHBLT,bmp)
+            cbBmiSrc = 10*4; //size of bitmap header
+            offBitsSrc = offBmiSrc + cbBmiSrc;
+            cbBitsSrc = srcW*srcH*4;//size of bitmap
+            usageSrc = 0; // DIB_RGB_COLORS
+            bitBltRasterOp = 0xCC0020; //SRCCOPY
+            xformSrc.Set(1,0,0,1,0,0); // identity
+            bkColorSrc.Set(0,0,0); //src bg color (irrelevant for us)
+            cxDest = w;
+            cyDest = h;
+            bmpHead.size = cbBmiSrc;
+            bmpHead.width = srcW;
+            bmpHead.height = -srcH;
+            bmpHead.planes = 1;
+            bmpHead.bitCount = 0x20;
+            bmpHead.compression = 0;//BI_RGB
+            bmpHead.imageSize = 0; //ignored for BI_RGB
+            bmpHead.xPelsPerMeter = 1; //arb?
+            bmpHead.yPelsPerMeter = 1;
+            bmpHead.colorUsed = 0;
+            bmpHead.colorImportant = 0;
+            bmpData.resize(srcW*srcH*4);
+            for (unsigned int i = 0;  i < srcW*srcH; ++i) {
+                bmpData[4*i+0] = R_BLUE(data[i]);
+                bmpData[4*i+1] = R_GREEN(data[i]);
+                bmpData[4*i+2] = R_RED(data[i]);
+                bmpData[4*i+3] = R_ALPHA(data[i]);
+            }
+        }
+	std::string& Serialize(std::string &o) const {
+            SRecord::Serialize(o) << bounds << xDest << yDest <<
+                cxDest << cyDest << bitBltRasterOp << xSrc << ySrc <<
+                xformSrc << bkColorSrc << usageSrc << TUInt4(offBmiSrc) <<
+                TUInt4(cbBmiSrc) << TUInt4(offBitsSrc) << TUInt4(cbBitsSrc) <<
+                cxSrc << cySrc <<                 
+                bmpHead.size << bmpHead.width << bmpHead.height <<
+                bmpHead.planes << bmpHead.bitCount << bmpHead.compression <<
+                bmpHead.imageSize << bmpHead.xPelsPerMeter <<
+                bmpHead.yPelsPerMeter << bmpHead.colorUsed <<
+                bmpHead.colorImportant;
+            o.append(bmpData);
+            return o;
+        }
+    };
+
+    struct ObjectPtrCmp {
+        bool operator() (SObject* o1, SObject* o2) const {
+            if (o1->iType < o2->iType) {
+                return true;
+            } else if (o1->iType > o2->iType) {
+                return false;
+            } else { //same type -- so compare details
+                switch (o1->iType) {
+                case eEMR_EXTCREATEPEN: {
+                    SPen *p1 = dynamic_cast<SPen*>(o1);
+                    SPen *p2 = dynamic_cast<SPen*>(o2);
+                    int res = memcmp(&p1->elp, &p2->elp, sizeof(p1->elp));
+                    if (res != 0) return res < 0;
+                    if (p1->elp.numEntries < p2->elp.numEntries) return true;
+                    if (p1->elp.numEntries > p2->elp.numEntries) return false;
+                    return memcmp(p1->styleEntries.data(),
+                                  p2->styleEntries.data(),
+                                  p1->styleEntries.size() * 4) < 0;
+                }
+                case eEMR_CREATEBRUSHINDIRECT:
+                    return memcmp(&dynamic_cast<SBrush*>(o1)->lb,
+                                  &dynamic_cast<SBrush*>(o2)->lb,
+                                  sizeof(dynamic_cast<SBrush*>(o1)->lb)) < 0;
+                case eEMR_EXTCREATEFONTINDIRECTW:
+                    return memcmp(&dynamic_cast<SFont*>(o1)->lf,
+                                  &dynamic_cast<SFont*>(o2)->lf,
+                                  sizeof(dynamic_cast<SFont*>(o1)->lf)) < 0;
+                default: {//should never happen
+                    throw std::logic_error("EMF object table scrambled");
+                }
+                }
+            }
+        }
+    };
+
+    class CObjectTable {
+    public:
+        CObjectTable(void) {
+            for (unsigned int i = 0;  i < eEMR_last;  ++i) {
+                m_CurrObj[i] = -1;
+            }
+            m_CurrMiterLimit = -1;
+        }
+        ~CObjectTable(void) {
+            for (TIndex::iterator i = m_Objects.begin();
+                 i != m_Objects.end();  ++i) {
+                delete *i;
+            }
+        }
+        unsigned int GetSize(void) const { return m_Objects.size(); }
+
+        unsigned char GetPen(unsigned int col, double lwd, unsigned int lty,
+                             unsigned int lend, unsigned int ljoin,
+                             unsigned int lmitre, double ps2dev,
+                             bool useUserLty, EMF::ofstream &out) {
+            SPen *pen = new SPen(col, lwd, lty, lend, ljoin, ps2dev,
+                                 useUserLty);
+            if ((int) lmitre != m_CurrMiterLimit) {
+                S_SETMITERLIMIT emr;
+                emr.miterLimit = lmitre*ps2dev;
+                emr.Write(out);
+                m_CurrMiterLimit = lmitre;
+            }
+            return x_SelectObject(pen, out)->m_ObjId;
+        }
+        unsigned char GetBrush(unsigned int col, EMF::ofstream &out) {
+            SBrush *brush = new SBrush(col);
+            return x_SelectObject(brush, out)->m_ObjId;
+        }
+        unsigned char GetFont(unsigned char face, int size,
+                              const std::string &familyUTF8,
+                              const std::string &familyUTF16,
+                              EMF::ofstream &out, SSysFontInfo **fontInf) {
+            SFont *font = new SFont(face, size, familyUTF16);
+            SObject *obj = x_SelectObject(font, out);
+            font = dynamic_cast<SFont*>(obj);
+            if (font->m_SysFontInfo == NULL) {
+                font->m_SysFontInfo = new SSysFontInfo(familyUTF8.c_str(),
+                                                       size, face);
+            }
+            if (fontInf) {
+                *fontInf = font->m_SysFontInfo;
+            }
+            return obj->m_ObjId;
+        }
+    private:
+        SObject* x_SelectObject(SObject *obj, EMF::ofstream &out) {
+            TIndex::iterator i = m_Objects.find(obj);
+            if (i == m_Objects.end()) {
+                i = m_Objects.insert(obj).first;
+                obj->m_ObjId = m_Objects.size();
+                obj->Write(out);
+            } else {
+                delete obj;
+            }
+            if (m_CurrObj[(*i)->iType] != (int)(*i)->m_ObjId) {
+                S_SELECTOBJECT emr;
+                emr.ihObject = (*i)->m_ObjId;
+                emr.Write(out);
+                m_CurrObj[(*i)->iType] = (*i)->m_ObjId;
+            }
+            return (*i);
+        }
+    private:
+        typedef std::set<SObject*, ObjectPtrCmp> TIndex;        
+        TIndex m_Objects;
+        int m_CurrObj[eEMR_last];
+        int m_CurrMiterLimit;
+    };
+
 } //end of EMF namespace
+
+#endif //EMF__H

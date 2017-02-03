@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 306 2015-01-29 18:45:54Z pjohnson $
+/* $Id: devEMF.cpp 334 2017-02-03 17:01:03Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -21,7 +21,7 @@
 
 
     If building library outside of R package (i.e. for debugging):
-        R CMD SHLIB devEMF.cpp
+        MAKEFLAGS="CPPFLAGS=`pkg-config --cflags xft` PKG_LIBS=`pkg-config --libs xft`" R CMD SHLIB '*.cpp'
 
     --------------------------------------------------------------------------
 */
@@ -39,23 +39,31 @@
 
 #include <fstream>
 #include <set>
-#include <map>
+#include <sstream>
+//#include <iostream> //FIXME / DEBUG ONLY
 
-#include "emf.h" //defines EMF data structures
 #include "fontmetrics.h" //platform-specific font metric code
+#include "emf.h"  //defines EMF data structures
+#include "emf+.h" //defines EMF+ data structures
 
 using namespace std;
 
 
 class CDevEMF {
 public:
-    CDevEMF(bool userLty, const char *defaultFontFamily) : m_debug(false) {
-        m_UseUserLty = userLty;
+    CDevEMF(const char *defaultFontFamily, bool customLty, bool emfPlus,
+            bool emfpFont, bool emfpRaster) :
+        m_debug(false) {
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
         m_NumRecords = 0;
-        m_LastHandle = m_CurrPen = m_CurrFont = m_CurrBrush = 0;
-        m_CurrHadj = m_CurrTextCol = -1;
+        m_CurrHadj = m_CurrTextCol = m_CurrPolyFill = -1;
+        //feature options
+        m_UseCustomLty = customLty;
+        m_UseEMFPlus = emfPlus;
+        if (m_debug) Rprintf("using emfplus: %d\n", emfPlus);
+        m_UseEMFPlusFont = emfpFont;
+        m_UseEMFPlusRaster = emfpRaster;
     }
 
     // Member-function R callbacks (see below class definition for
@@ -75,6 +83,11 @@ public:
 
     void Rect(double x0, double y0, double x1, double y1, const pGEcontext gc);
     void Polygon(int n, double *x, double *y, const pGEcontext gc);
+    void Path(double *x, double *y, int nPoly, int *nPts, bool winding,
+              const pGEcontext gc);
+    void Raster(unsigned int* data, int w, int h, double x, double y,
+                double width, double height, double rot,
+                Rboolean interpolate);
 
     // global helper functions
     static int x_Inches2Dev(double inches) { return 2540*inches;}
@@ -109,241 +122,51 @@ private:
         for (int i = 0; i < n;  ++i, ++y) *y = m_Height - *y;
     }
 
-    //Helper classes for creating EMF records
-    template<class T> 
-    void x_WriteRcd(const T &r) {
-	string buff; r.Serialize(buff);
-	buff.resize(((buff.size() + 3)/4)*4, '\0'); //add padding
-        string nSize;
-        nSize << EMF::TUInt4(buff.size());
-	buff.replace(4,4, nSize);
-	m_File.write(buff.data(), buff.size());
-	++m_NumRecords;
+    unsigned char x_GetPen(const pGEcontext gc) {
+        return m_UseEMFPlus ?
+            m_ObjectTable.GetPen(gc->col, gc->lwd*72./96., gc->lty, gc->lend,
+                                 gc->ljoin, gc->lmitre, x_Inches2Dev(1)/72.,
+                                 m_UseCustomLty, m_File) :
+            m_ObjectTableEMF.GetPen(gc->col, gc->lwd*72./96., gc->lty, gc->lend,
+                                    gc->ljoin, gc->lmitre, x_Inches2Dev(1)/72.,
+                                    m_UseCustomLty, m_File);
     }
-
-    struct SPen : EMF::S_EXTCREATEPEN {
-        SPen(const pGEcontext gc, bool useUserLty) {
-            ihPen = 0; //must be reset later
-            offBmi = cbBmi = offBits = cbBits = 0;
-            elp.penStyle = EMF::ePS_GEOMETRIC;
-            elp.width = x_Inches2Dev(gc->lwd/96.);
-            elp.brushStyle = EMF::eBS_SOLID;
-            elp.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
-            elp.brushHatch = 0;
-            elp.numEntries = 0;
-            if (R_TRANSPARENT(gc->col)) {
-                elp.penStyle |= EMF::ePS_NULL;
-                elp.brushStyle = EMF::eBS_NULL;
-                return;
-            }
-            if (!useUserLty) {
-                // if not using EMF custom line types, then map
-                // between vaguely equivalent default line types
-                switch(gc->lty) {
-                case LTY_SOLID: elp.penStyle |= EMF::ePS_SOLID; break;
-                case LTY_DASHED: elp.penStyle |= EMF::ePS_DASH; break;
-                case LTY_DOTTED: elp.penStyle |= EMF::ePS_DOT; break;
-                case LTY_DOTDASH: elp.penStyle |= EMF::ePS_DASHDOT; break;
-                case LTY_LONGDASH: elp.penStyle |= EMF::ePS_DASHDOTDOT; break;
-                default: elp.penStyle |= EMF::ePS_SOLID;
-                    Rf_warning("Using lty unsupported by EMF device");
-                }
-            } else { //custom line style is preferable
-                int lty = gc->lty;
-                for (int tmp = lty;  elp.numEntries < 8  &&  tmp & 15;
-                     ++elp.numEntries, tmp >>= 4);
-                if (elp.numEntries == 0) {
-                    elp.penStyle |= EMF::ePS_SOLID;
-                } else {
-                    elp.penStyle |= EMF::ePS_USERSTYLE;
-                    styleEntries = new EMF::TUInt4[elp.numEntries];
-                    for(int i = 0;  i < 8  &&  lty & 15;  ++i, lty >>= 4) {
-                        styleEntries[i] = x_Inches2Dev((lty & 15)/72.);
-                    }
-                }
-            }
-
-            switch (gc->lend) {
-            case GE_ROUND_CAP: elp.penStyle |= EMF::ePS_ENDCAP_ROUND; break;
-            case GE_BUTT_CAP: elp.penStyle |= EMF::ePS_ENDCAP_FLAT; break;
-            case GE_SQUARE_CAP: elp.penStyle |= EMF::ePS_ENDCAP_SQUARE; break;
-            default: break;//actually of range, but R doesn't complain..
-            }
-
-            switch (gc->ljoin) {
-            case GE_ROUND_JOIN: elp.penStyle |= EMF::ePS_JOIN_ROUND; break;
-            case GE_MITRE_JOIN: elp.penStyle |= EMF::ePS_JOIN_MITER; break;
-            case GE_BEVEL_JOIN: elp.penStyle |= EMF::ePS_JOIN_BEVEL; break;
-            default: break;//actually of range, but R doesn't complain..
-            }
-	}
-    };
-    class CPens : public set<SPen*, SPen::Less> {
-    public: ~CPens(void) {
-        for (iterator i = begin();  i != end();  ++i) { delete *i; }
-    }
-    };
-    
-    struct SBrush : EMF::SBrush {
-	SBrush(int col) {
-	    ihBrush = 0; //must be reset later
-            lb.brushStyle = (R_TRANSPARENT(col) ? EMF::eBS_NULL : EMF::eBS_SOLID);
-            lb.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
-            lb.brushHatch = 0; //unused with BS_SOLID or BS_NULL
-	}
-    };
-    typedef set<SBrush> CBrushes;
-
-    struct SFont : EMF::SFont {
-        SSysFontInfo *m_SysFontInfo;
-	SFont(int face, int size, int rot, const char* family) {
-            m_SysFontInfo = NULL;
-	    ihFont = 0; //must be reset later
-	    lf.height = -size;//(-) matches against *character* height
-	    lf.width = 0;
-	    lf.escapement = rot*10;
-	    lf.orientation = 0;
-	    lf.weight = (face == 2  ||  face == 4) ?
-                EMF::eFontWeight_bold : EMF::eFontWeight_normal;
-	    lf.italic = (face == 3  ||  face == 4) ? 0x01 : 0x00;
-	    lf.underline = 0x00;
-	    lf.strikeOut = 0x00;
-	    lf.charSet = EMF::eDEFAULT_CHARSET;
-	    lf.outPrecision = EMF::eOUT_STROKE_PRECIS;
-	    lf.clipPrecision = EMF::eCLIP_DEFAULT_PRECIS;
-	    lf.quality = EMF::eDEFAULT_QUALITY;
-	    lf.pitchAndFamily = EMF::eFF_DONTCARE + EMF::eDEFAULT_PITCH;
-            lf.SetFace(iConvUTF8toUTF16LE(family)); //assume UTF8/ASCII family
-	}
-	~SFont() { delete m_SysFontInfo; }
-    };
-    struct FontPtrCmp {
-        bool operator() (SFont* f1, SFont* f2) const {
-            return memcmp(&f1->lf,&f2->lf, sizeof(EMF::SLogFont)) < 0;
-        }
-    };
-    class CFonts : public set<SFont*, FontPtrCmp> {
-    public:
-        ~CFonts(void) {
-            for (iterator i = begin();  i != end();  ++i) {
-                delete *i;
-            }
-        }
-    };
-
-    void x_SetLinetype(const pGEcontext gc) {
-	if (m_debug) Rprintf("lty:%i; lwd:%f; col:%x\n", gc->lty, gc->lwd, gc->col);
-	SPen *newPen = new SPen(gc, m_UseUserLty);
-	CPens::iterator i = m_Pens.find(newPen);
-	if (i == m_Pens.end()) {
-            if (R_ALPHA(gc->col) > 0  &&  R_ALPHA(gc->col) < 255) {
-                Rf_warning("partial transparency is not supported for EMF");
-            }
-	    newPen->ihPen = ++m_LastHandle;
-	    i = m_Pens.insert(newPen).first;
-	    x_WriteRcd(*newPen);
-	} else {
-            delete newPen;
-        }
-	if ((*i)->ihPen != m_CurrPen) {
-	    x_CreateRcdSelectObj((*i)->ihPen);
-	    m_CurrPen = (*i)->ihPen;
-            if (gc->ljoin == GE_MITRE_JOIN) { //need to set mitre limit as well
-                EMF::S_SETMITERLIMIT emr;
-                //NOTE: guessing on mitre units; haven't checked
-                emr.miterLimit = x_Inches2Dev(gc->lmitre/72.);
-                x_WriteRcd(emr);
-            }
-	}
-    }
-    void x_SetFill(int col) {
-	if (m_debug) Rprintf("fill:%x\n", col);
-	SBrush newBrush(col);
-	CBrushes::iterator i = m_Brushes.find(newBrush);
-	if (i == m_Brushes.end()) {
-            if (R_ALPHA(col) > 0  &&  R_ALPHA(col) < 255) {
-                Rf_warning("partial transparency is not supported for EMF");
-            }
-	    newBrush.ihBrush = ++m_LastHandle;
-	    i = m_Brushes.insert(newBrush).first;
-	    x_WriteRcd(newBrush);
-	}
-	if (i->ihBrush != m_CurrBrush) {
-	    x_CreateRcdSelectObj(i->ihBrush);
-	    m_CurrBrush = i->ihBrush;
-	}
-    }
-    const SFont* x_LoadFont(int face, double size, int rot, const char *family){
-        if (family[0] == '\0') {
-            family = m_DefaultFontFamily.c_str();
-        }
-	SFont *newFont = new SFont(face, x_Inches2Dev(size/72.), rot, family);
-	CFonts::iterator i = m_Fonts.find(newFont);
-	if (i == m_Fonts.end()) {
-            if (m_debug) Rprintf("loadfont.  family:%s; face:%i; size:%.1f; rot:%i\n", family, face, size, rot);
-	    newFont->ihFont = ++m_LastHandle;
-            newFont->m_SysFontInfo = 
-                new SSysFontInfo(family, x_Inches2Dev(size/72.), face);
-	    i = m_Fonts.insert(newFont).first;
-	    x_WriteRcd(*newFont);
-	}
-        return *i;
-    }
-    void x_SetFont(int face, double size, int rot, const char *family) {
-        const SFont *font = x_LoadFont(face, size, rot, family);
-	if (font->ihFont != m_CurrFont) {
-	    x_CreateRcdSelectObj(font->ihFont);
-	    m_CurrFont = font->ihFont;
-	}
-    }
-    void x_SetHAdj(double hadj) {
-        if (m_CurrHadj != hadj) {
-            EMF::S_SETTEXTALIGN emr;
-            if (hadj == 0.) {
-                emr.mode = EMF::eTA_BASELINE|EMF::eTA_LEFT;
-            } else if (hadj == 1.) {
-                emr.mode = EMF::eTA_BASELINE|EMF::eTA_RIGHT;
-            } else {
-                emr.mode = EMF::eTA_BASELINE|EMF::eTA_CENTER;
-            }
-            x_WriteRcd(emr);
-            m_CurrHadj = hadj;
-        }
-    }
-    void x_SetTextColor(int col) {
-        if (m_CurrTextCol != col) {
-            EMF::S_SETTEXTCOLOR emr;
-            emr.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
-            x_WriteRcd(emr);
-            m_CurrTextCol = col;
-        }
-    }
-
-    void x_CreateRcdHeader(void);
-    void x_CreateRcdSelectObj(unsigned int obj) {
-        EMF::S_SELECTOBJECT emr;
-	emr.ihObject = obj;
-        x_WriteRcd(emr);
+    unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
+                            const char *fontfamily = NULL) {
+        int face = (gc->fontface < 1  || gc->fontface > 4) ? 1 : gc->fontface;
+        const char *family = fontfamily ? fontfamily :
+            gc->fontfamily[0] != '\0' ? gc->fontfamily :
+            m_DefaultFontFamily.c_str();
+        //emf+ font support is incomplete in LibreOffice (rotations are buggy)
+        return m_UseEMFPlus  &&  m_UseEMFPlusFont ?
+            m_ObjectTable.GetFont(face, x_Inches2Dev(x_EffPointsize(gc)/72),
+                                  family, iConvUTF8toUTF16LE(family),
+                                  m_File, info) :
+            m_ObjectTableEMF.GetFont(face, x_Inches2Dev(x_EffPointsize(gc)/72),
+                                     family, iConvUTF8toUTF16LE(family),
+                                     m_File, info);
     }
 
 private:
     bool m_debug;
-    ofstream m_File;
+    EMF::ofstream m_File;
     int m_NumRecords;
     int m_PageNum;
     int m_Width, m_Height;
-    bool m_UseUserLty;
     string m_DefaultFontFamily;
+    bool m_UseCustomLty;
+    bool m_UseEMFPlus;
+    bool m_UseEMFPlusFont;
+    bool m_UseEMFPlusRaster;
 
-    //states
+    //EMF states
     double m_CurrHadj;
     int m_CurrTextCol;
+    int m_CurrPolyFill;
 
-    //EMF objects
-    int m_LastHandle;
-    CPens m_Pens;       unsigned int m_CurrPen;
-    CBrushes m_Brushes; unsigned int m_CurrBrush;
-    CFonts m_Fonts;     unsigned int m_CurrFont;
+    //EMF/EMF+ objects
+    EMFPLUS::CObjectTable m_ObjectTable;
+    EMF::CObjectTable m_ObjectTableEMF;
 };
 
 // R callbacks below (declare extern "C")
@@ -353,17 +176,19 @@ namespace EMFcb {
         void Deactivate(pDevDesc) {}
         void Mode(int, pDevDesc) {}
         Rboolean Locator(double*, double*, pDevDesc) {return FALSE;}
-        void Raster(unsigned int*, int, int, double, double, double,
-                    double, double, Rboolean, const pGEcontext, pDevDesc) {
-            Rf_warning("Raster rending not yet implemented for EMF");
+        void Raster(unsigned int* r, int w, int h, double x, double y,
+                    double width, double height, double rot,
+                    Rboolean interpolate, const pGEcontext, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->
+                Raster(r,w,h,x,y,width,height,rot,interpolate);
         }
         SEXP Cap(pDevDesc) {
             Rf_warning("Raster capture not available for EMF");
             return R_NilValue;
         }
-        void Path(double*, double*, int, int*, Rboolean, const pGEcontext,
-                  pDevDesc) {
-            Rf_warning("Path rending not yet implemented for EMF.");
+        void Path(double* x, double* y, int n, int* np, Rboolean wnd,
+                  const pGEcontext gc, pDevDesc dd) {
+            static_cast<CDevEMF*>(dd->deviceSpecific)->Path(x,y, n,np, wnd, gc);
         }
         void Close(pDevDesc dd) {
             static_cast<CDevEMF*>(dd->deviceSpecific)->Close();
@@ -429,18 +254,25 @@ void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
     if (c < 0) { c = -c; }
 
-    const SFont *font = x_LoadFont(max(1,min(5,gc->fontface)),
-                                   x_EffPointsize(gc), 0, gc->fontfamily);
-    if (font  &&  !font->m_SysFontInfo->HasChar(c)  &&  gc->fontface == 5) {
-        // hacky check for existence with "Symbol" font
-        font = x_LoadFont(5, x_EffPointsize(gc), 0, "Symbol");
+    SSysFontInfo *info;
+    x_GetFont(gc, &info);
+    if (!(info  &&  info->HasChar(c))  &&  gc->fontface == 5) {
+        // check for char existence in "Symbol" font
+        x_GetFont(gc, &info, "Symbol");
+    } else if (!info) {
+        //last ditch attempt
+        x_GetFont(gc, &info, "sans");
+        if (info) {
+            Rf_warning("Using 'sans' font metrics instead of requested '%s'",
+                       gc->fontfamily);
+        }
     }
-    if (!font) { //no metrics available
+    if (!info) { //no metrics available
         *ascent = 0;
         *descent = 0;
         *width = 0;
     } else {
-        font->m_SysFontInfo->GetMetrics(c, ascent, descent, width);
+        info->GetMetrics(c, *ascent, *descent, *width);
     }
     if (m_debug) Rprintf("\t%f/%f/%f\n",*ascent,*descent,*width);
 }
@@ -449,12 +281,10 @@ void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
 double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
     if (m_debug) Rprintf("strwidth ('%s') --> ", str);
 
-    const SFont *font = x_LoadFont(max(1,min(5,gc->fontface)),
-                                   x_EffPointsize(gc), 0, gc->fontfamily);
-    double width = 0;
-    if (font) {
-        width = font->m_SysFontInfo->GetStrWidth(str);
-    }
+    SSysFontInfo *info;
+    x_GetFont(gc, &info);
+
+    double width =  info ? info->GetStrWidth(str) : 0;
 
     if (m_debug) Rprintf("%f\n", width);
     //cout << "strwidth: " << width/CDevEMF::x_Inches2Dev(1) << endl;
@@ -462,45 +292,6 @@ double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
 }
 
 	/* Initialize the device */
-
-void CDevEMF::x_CreateRcdHeader(void) {
-    {
-        EMF::SHeader emr;
-        emr.bounds.Set(0,0,m_Width,m_Height);
-        emr.frame.Set(0,0,m_Width,m_Height);
-        emr.signature = 0x464D4520;
-        emr.version = 0x00010000;
-        emr.nBytes = 0;   //WILL EDIT WHEN CLOSING
-        emr.nRecords = 0; //WILL EDIT WHEN CLOSING
-        emr.nHandles = 0; //WILL EDIT WHEN CLOSING
-        emr.reserved = 0x0000;
-        //Description string must be UTF-16LE
-        emr.desc = iConvUTF8toUTF16LE("Created by R using devEMF.");
-        emr.nDescription = emr.desc.length()/2;
-        emr.offDescription = 0; //set during serialization
-        emr.nPalEntries = 0;
-        emr.device.Set(m_Width,m_Height);
-        emr.millimeters.Set(m_Width/100,m_Height/100);
-        emr.cbPixelFormat=0x00000000;
-        emr.offPixelFormat=0x00000000;
-        emr.bOpenGL=0x00000000;
-        emr.micrometers.Set(m_Width*10, m_Height*10);
-        x_WriteRcd(emr);
-    }
-
-    {//Don't paint text box background
-        EMF::S_SETBKMODE emr;
-        emr.mode = EMF::eTRANSPARENT;
-        x_WriteRcd(emr);
-    }
-
-    {//Logical units == device units
-        EMF::S_SETMAPMODE emr;
-        emr.mode = EMF::eMM_TEXT;
-        x_WriteRcd(emr);
-    }
-}
-
 
 bool CDevEMF::Open(const char* filename, int width, int height)
 {
@@ -512,7 +303,94 @@ bool CDevEMF::Open(const char* filename, int width, int height)
     if (!m_File) {
 	return FALSE;
     }
-    x_CreateRcdHeader();
+
+    {
+        EMF::SHeader emr;
+        emr.bounds.Set(0,0,m_Width,m_Height); //device units
+        emr.frame.Set(0,0, // units of 0.01mm
+                      2540*m_Width/x_Inches2Dev(1),
+                      2540*m_Height/x_Inches2Dev(1)); 
+        emr.signature = 0x464D4520;
+        emr.version = 0x00010000;
+        emr.nBytes = 0;   //WILL EDIT WHEN CLOSING
+        emr.nRecords = 0; //WILL EDIT WHEN CLOSING
+        emr.nHandles = 0; //WILL EDIT WHEN CLOSING
+        emr.reserved = 0x0000;
+        string ver = "?"; // devEMF version
+        {//find version using R "packageVersion" function
+            SEXP packageVer, call;
+            PROTECT(packageVer = Rf_findFun(Rf_install("packageVersion"),
+                                            R_GlobalEnv));
+            PROTECT(call = Rf_lang2(packageVer, Rf_ScalarString
+                                    (Rf_mkChar("devEMF"))));
+            SEXP res = Rf_eval(call, R_GlobalEnv);
+            UNPROTECT(2);
+            if (Rf_isVector(res)  &&  Rf_length(res) == 1  &&
+                Rf_isInteger(VECTOR_ELT(res,0))  &&
+                Rf_length(VECTOR_ELT(res,0)) == 2) {
+                std::ostringstream oss;
+                oss << INTEGER(VECTOR_ELT(res,0))[0] << "."
+                    << INTEGER(VECTOR_ELT(res,0))[1];
+                ver = oss.str();
+            }
+        }
+        //Description string must be UTF-16LE
+        emr.desc = iConvUTF8toUTF16LE("Created by R using devEMF ver. "+ver);
+        emr.nDescription = emr.desc.length()/2;
+        emr.offDescription = 0; //set during serialization
+        emr.nPalEntries = 0;
+        emr.device.Set(m_Width,m_Height);
+        emr.millimeters.Set(m_Width * (25.4/x_Inches2Dev(1)),
+                            m_Height * (25.4/x_Inches2Dev(1)));
+        emr.cbPixelFormat=0x00000000;
+        emr.offPixelFormat=0x00000000;
+        emr.bOpenGL=0x00000000;
+        emr.micrometers.Set(m_Width * (25400/x_Inches2Dev(1)),
+                            m_Height * (25400/x_Inches2Dev(1)));
+        emr.Write(m_File);
+    }
+
+    if (m_UseEMFPlus) {
+        {
+            EMFPLUS::SHeader emr;
+            emr.plusFlags = 0; //specifies for video display context
+            emr.dpiX = x_Inches2Dev(1);
+            emr.dpiY = x_Inches2Dev(1);
+            emr.Write(m_File);
+        }
+        { // page transform (1 pixel == 1 device unit)
+            EMFPLUS::SSetPageTransform emr(EMFPLUS::eUnitPixel, 1);
+            emr.Write(m_File);
+        }
+        {// use decent anti-aliasing (key for viewing in MS Office)
+            EMFPLUS::SSetAntiAliasMode emr(true);
+            emr.Write(m_File);
+        }
+        {// (unclear if affects anything with either MS or Libre Office)
+            EMFPLUS::SSetTextRenderingHint emr(EMFPLUS::eTRHAntiAliasGridFit);
+            emr.Write(m_File);
+        }
+    }
+
+    if (!m_UseEMFPlus  ||  !m_UseEMFPlusFont  ||  !m_UseEMFPlusRaster) {
+        {// page transform (1 pixel == 1 device unit)
+            EMF::S_SETMAPMODE emr;
+            emr.mode = EMF::eMM_TEXT;
+            emr.Write(m_File);
+        }
+        
+        {//Don't paint text box background
+            EMF::S_SETBKMODE emr;
+            emr.mode = EMF::eTRANSPARENT;
+            emr.Write(m_File);
+        }
+     
+        {//Fixed text alignment point
+            EMF::S_SETTEXTALIGN emr;
+            emr.mode = EMF::eTA_BASELINE|EMF::eTA_LEFT;
+            emr.Write(m_File);
+        }
+    }
     return TRUE;
 }
 
@@ -529,7 +407,7 @@ void CDevEMF::NewPage(const pGEcontext gc) {
 
 void CDevEMF::Clip(double x0, double x1, double y0, double y1)
 {
-    if (m_debug) Rprintf("clip\n");
+    if (m_debug) Rprintf("clip %f,%f,%f,%f\n", x0,y0,x1,y1);
     return;
 }
 
@@ -537,30 +415,96 @@ void CDevEMF::Clip(double x0, double x1, double y0, double y1)
 void CDevEMF::Close(void)
 {
     if (m_debug) Rprintf("close\n");
-    
+
+    if (m_UseEMFPlus) {
+        EMFPLUS::SEndOfFile empr;
+        empr.Write(m_File);
+    }
+
     { //EOF record
         EMF::S_EOF emr;
         emr.nPalEntries = 0;
         emr.offPalEntries = 0;
         emr.nSizeLast = sizeof(emr);
-        x_WriteRcd(emr);
+        emr.Write(m_File);
     }
+    
 
     { //Edit header record to report number of records, handles & size
-        EMF::SHeader emr;
-        emr.nBytes = m_File.tellp();
-        emr.nRecords = m_NumRecords;
-        //not mentioned in spec, but seems to need one extra handle
-        emr.nHandles = m_LastHandle+1;
-        m_File.seekp(4*12);//offset of nBytes
+        unsigned int nBytes = m_File.tellp();
+        m_File.seekp(4*12);//offset of nBytes field of EMF header
         string data;
-        data << EMF::TUInt4(emr.nBytes) << EMF::TUInt4(emr.nRecords) << EMF::TUInt4(emr.nHandles);
+        data << EMF::TUInt4(nBytes)
+             << EMF::TUInt4(m_File.nRecords)
+            //not mentioned in spec, but seems to need one extra handle
+             << EMF::TUInt4(m_ObjectTableEMF.GetSize()+1);
         m_File.write(data.data(), 12);
         m_File.close();
     }
 }
 
-	/* Draw To */
+void CDevEMF::Raster(unsigned int* r, int w, int h, double x, double y,
+                     double width, double height, double rot,
+                     Rboolean interpolate) {
+    if (m_debug) Rprintf("raster: %d,%d / %f,%f,%f,%f\n", w,h,x,y,width,height);
+    
+    x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
+    y -= height;
+    /* Sigh.. as of 2016, LibreOffice support for EMF+ raster ops is broken/missing .*/
+    if (m_UseEMFPlus  &&  m_UseEMFPlusRaster) {
+        if (rot != 0) {
+            EMFPLUS::SMultiplyWorldTransform trans
+                (cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                 sin(rot*M_PI/180), cos(rot*M_PI/180),
+                 x, y+height);
+            trans.Write(m_File);
+            x = 0; y = -height; //rotate around ll corner
+        }
+        EMFPLUS::SSetInterpolationMode m1
+            (interpolate ?
+             EMFPLUS::eInterpolationModeHighQualityBilinear:
+             EMFPLUS::eInterpolationModeNearestNeighbor);
+        m1.Write(m_File);
+        EMFPLUS::SSetPixelOffsetMode m2(EMFPLUS::ePixelOffsetModeHalf);
+        m2.Write(m_File);
+        EMFPLUS::SDrawImage image(m_ObjectTable.GetImage(r,w,h,m_File), w,h,
+                                  x, y, width, height);
+        image.Write(m_File);
+        if (rot != 0) {
+            EMFPLUS::SResetWorldTransform trans;
+            trans.Write(m_File);
+        }
+    } else {
+        /* Unfortunately, I can't figure out a interpolation control
+           for EMF -- so this seems to leave it up to the client
+           program (generally seems sort of linear interpolation) The
+           following lines look like they might work.. but don't
+        if (!interpolate) {
+           EMF::S_SETSTRETCHBLTMODE m1(3);
+           m1.Write(m_File);
+           EMF::S_SETBRUSHORGEX m2(0,0);
+           m2.Write(m_File);
+        }
+        */
+        if (rot != 0) {
+            EMF::S_SAVEDC emr1;
+            emr1.Write(m_File);
+            EMF::S_MODIFYWORLDTRANSFORM emr2(EMF::eMWT_LEFTMULTIPLY);
+            emr2.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                           sin(rot*M_PI/180), cos(rot*M_PI/180),
+                          x, y+height);
+            emr2.Write(m_File);
+            x = 0; y = -height; //rotate around ll corner
+        }
+        EMF::S_STRETCHBLT bmp(r, w,h,x,y,width,height);
+        bmp.Write(m_File);
+        if (rot != 0) {
+            EMF::S_RESTOREDC emr;
+            emr.Write(m_File);
+        }
+    }
+}
+
 
 void CDevEMF::Line(double x1, double y1, double x2, double y2,
 	       const pGEcontext gc)
@@ -568,8 +512,7 @@ void CDevEMF::Line(double x1, double y1, double x2, double y2,
     if (m_debug) Rprintf("line\n");
 
     if (x1 != x2  ||  y1 != y2) {
-	x_SetLinetype(gc);
-        double x[2], y[2];
+	double x[2], y[2];
         x[0] = x1; x[1] = x2;
         y[0] = y1; y[1] = y2;
         Polyline(2, x, y, gc);
@@ -579,76 +522,185 @@ void CDevEMF::Line(double x1, double y1, double x2, double y2,
 void CDevEMF::Polyline(int n, double *x, double *y, const pGEcontext gc)
 {
     if (m_debug) Rprintf("polyline\n");
-    x_SetLinetype(gc);
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
-    EMF::SPoly polyline(EMF::eEMR_POLYLINE, n, x, y);
-    x_WriteRcd(polyline);
+    if (m_UseEMFPlus) {
+        EMFPLUS::SDrawLines lines(n, x, y, x_GetPen(gc));
+        lines.Write(m_File);
+    } else {
+        x_GetPen(gc);
+        EMF::SPoly polyline(EMF::eEMR_POLYLINE, n, x, y);
+        polyline.Write(m_File);
+    }
 }
 
 void CDevEMF::Rect(double x0, double y0, double x1, double y1, const pGEcontext gc)
 {
-    if (m_debug) Rprintf("rect\n");
-    x_SetLinetype(gc);
-    x_SetFill(gc->fill);
+    if (m_debug) Rprintf("rect (converted to poly)\n");
 
-    x_TransformY(&y0, 1);//EMF has origin in upper left; R in lower left
-    x_TransformY(&y1, 1);//EMF has origin in upper left; R in lower left
-    
-    EMF::S_RECTANGLE emr;
-    emr.box.Set(lround(x0), lround(y0), lround(x1), lround(y1));
-    x_WriteRcd(emr);
+    double x[4], y[4];
+    x[0] = x[1] = x0;
+    x[2] = x[3] = x1;
+    y[0] = y[3] = y0;
+    y[1] = y[2] = y1;
+    Polygon(4, x, y, gc);
 }
 
 void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
 {
-    if (m_debug) Rprintf("circle\n");
-
-    x_SetLinetype(gc);
-    x_SetFill(gc->fill);
+    if (m_debug) Rprintf("circle (%f,%f r=%f)\n", x, y,r);
 
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
-    EMF::S_ELLIPSE emr;
-    emr.box.Set(lround(x-r), lround(y-r), lround(x+r), lround(y+r));
-    x_WriteRcd(emr);
+    if (m_UseEMFPlus) {
+        {
+            EMFPLUS::SDrawEllipse circle(x-r, y-r, 2*r, 2*r, x_GetPen(gc));
+            circle.Write(m_File);
+        }
+        if (!R_TRANSPARENT(gc->fill)) {
+            EMFPLUS::SFillEllipse circle(x-r, y-r, 2*r, 2*r, gc->fill);
+            circle.Write(m_File);
+        }
+    } else {
+        x_GetPen(gc);
+        m_ObjectTableEMF.GetBrush(gc->fill, m_File);
+        EMF::S_ELLIPSE emr;
+        emr.box.Set(floor(x-r + 0.5), floor(y-r + 0.5),
+                    floor(x+r + 0.5), floor(y+r + 0.5));
+        emr.Write(m_File);
+    }
 }
 
 void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
 {
     if (m_debug) { Rprintf("polygon"); for (int i = 0; i<n;  ++i) {Rprintf("(%f,%f) ", x[i], y[i]);}; Rprintf("\n");}
 
-    x_SetLinetype(gc);
-    x_SetFill(gc->fill);
-
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
-    EMF::SPoly polygon(EMF::eEMR_POLYGON, n, x, y);
-    x_WriteRcd(polygon);
+    if (m_UseEMFPlus) {
+        int pathId = m_ObjectTable.GetPath(1,x,y,&n, m_File);
+        if (!R_TRANSPARENT(gc->fill)) {
+            EMFPLUS::SFillPath fill(pathId, gc->fill);
+            fill.Write(m_File);
+        }
+        {
+            EMFPLUS::SDrawPath drawPath(pathId, x_GetPen(gc));
+            drawPath.Write(m_File);
+        }
+    } else {
+        x_GetPen(gc);
+        m_ObjectTableEMF.GetBrush(gc->fill, m_File);
+        EMF::SPoly polygon(EMF::eEMR_POLYGON, n, x, y);
+        polygon.Write(m_File);
+    }
+}
+
+void CDevEMF::Path(double *x, double *y, int nPoly, int *nPts, bool winding,
+                   const pGEcontext gc)
+{
+    if (m_debug) { Rprintf("path\t(%d subpaths w/ %i winding)", nPoly, winding?1:0); }
+
+    int n = 0;
+    for (int i = 0;  i < nPoly;  ++i) {
+        n += nPts[i];
+    }
+    x_TransformY(y, n);//EMF has origin in upper left; R in lower left
+
+    if (m_UseEMFPlus) {
+        // I can't find a way to make use of "winding" in EMF+
+        int pathId = m_ObjectTable.GetPath(nPoly, x, y, nPts, m_File);
+        EMFPLUS::SDrawPath drawPath(pathId, x_GetPen(gc));
+        drawPath.Write(m_File);
+        if (!R_TRANSPARENT(gc->fill)) {
+            EMFPLUS::SFillPath fill(pathId, gc->fill);
+            fill.Write(m_File);
+        }
+    } else {
+        Rf_warning("devEMF does not implement 'path' drawing for EMF (only EMF+)");
+        /*
+        if (( winding  &&  m_CurrPolyFill != EMF::ePF_WINDING)  ||
+            (!winding  &&  m_CurrPolyFill != EMF::ePF_ALTERNATE)) {
+            m_CurrPolyFill = (winding) ? EMF::ePF_WINDING : EMF::ePF_ALTERNATE;
+            EMF::S_SETPOLYFILLMODE emr;
+            emr.mode = m_CurrPolyFill;
+            emr.Write(m_File);
+        }
+        */
+    }
 }
 
 void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
-                   double hadj, 
-	       const pGEcontext gc)
+                       double hadj, const pGEcontext gc)
 {
     if (m_debug) Rprintf("textUTF8: %s, %x  at %.1f %.1f\n", str, gc->col, x, y);
-
-    x_SetFont(gc->fontface, x_EffPointsize(gc), rot, gc->fontfamily);
-    x_SetHAdj(hadj);
-    x_SetTextColor(gc->col);
-
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
-    EMF::S_EXTTEXTOUTW emr;
-    emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
-    emr.graphicsMode = EMF::eGM_COMPATIBLE;
-    emr.exScale = 1;
-    emr.eyScale = 1;
-    emr.emrtext.reference.Set(lround(x), lround(y));
-    emr.emrtext.offString = 0;//fill in when serializing
-    emr.emrtext.options = 0;
-    emr.emrtext.rect.Set(0,0,0,0);
-    emr.emrtext.offDx = 0;
-    emr.emrtext.str = iConvUTF8toUTF16LE(str);
-    emr.emrtext.nChars = emr.emrtext.str.length()/2;
-    x_WriteRcd(emr);
+
+    SSysFontInfo *info;
+    unsigned char fontId = x_GetFont(gc, &info);
+    //Sigh.. as of 2016 because LibreOffice EMF+ has buggy support of transformations to fonts (e.g., shrinks instead of rotates!)
+    if (m_UseEMFPlus  &&  m_UseEMFPlusFont) {
+        if (rot != 0) {
+            EMFPLUS::SMultiplyWorldTransform trans
+                (cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                 sin(rot*M_PI/180), cos(rot*M_PI/180),
+                 x, y);
+            trans.Write(m_File);
+            x = 0; y = 0; //because already translated!
+        }
+        EMFPLUS::SDrawString text
+            (iConvUTF8toUTF16LE(str), gc->col, fontId,
+             m_ObjectTable.GetStringFormat(EMFPLUS::eStrAlignNear,
+                                           EMFPLUS::eStrAlignNear, m_File));
+        double width = info->GetStrWidth(str);
+        text.m_LayoutRect.x = x - width*hadj;
+        double ascent, descent;
+        info->GetFontBBox(ascent, descent, width);
+        if (m_debug) Rprintf("fbbox: %.1f %.1f %.1f\n", ascent, descent, width);
+        text.m_LayoutRect.y = y - ascent;//find baseline
+        text.Write(m_File);
+        if (rot != 0) {
+            EMFPLUS::SResetWorldTransform trans;
+            trans.Write(m_File);
+        }
+    } else {
+        if (rot != 0) {
+            EMF::S_SAVEDC emr1;
+            emr1.Write(m_File);
+            EMF::S_MODIFYWORLDTRANSFORM emr2(EMF::eMWT_LEFTMULTIPLY);
+            emr2.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                           sin(rot*M_PI/180), cos(rot*M_PI/180),
+                          x, y);
+            emr2.Write(m_File);
+            x = 0; y = 0; //because already translated!
+        }
+
+        if (m_CurrTextCol != gc->col) {
+            EMF::S_SETTEXTCOLOR emr;
+            emr.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
+            if (R_ALPHA(gc->col) > 0  &&  R_ALPHA(gc->col) < 255) {
+                Rf_warning("Unfortunately, partial transparency for fonts is not supported by EMF, and Libreoffice EMF+ support for fonts is incomplete; thus for now, devEMF does not enable transparent fonts.");
+            }
+            emr.Write(m_File);
+            m_CurrTextCol = gc->col;
+        }
+        EMF::S_EXTTEXTOUTW emr;
+        emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
+        emr.graphicsMode = EMF::eGM_ADVANCED;
+        emr.exScale = 0; //not used with GM_ADVANCED
+        emr.eyScale = 0; //not used with GM_ADVANCED
+        double textWidth =  info ? info->GetStrWidth(str) : 0;
+        emr.emrtext.reference.Set(x-floor(textWidth*hadj + 0.5), y);//manually shift reference point for LibreOffice + tranformation compatibility
+        emr.emrtext.offString = 0; // fill in when serializing
+        emr.emrtext.options = 0; // from spec, seems should be eETO_NO_RECT, but office does seem to support this
+        emr.emrtext.rect.Set(0,0,0,0);
+        emr.emrtext.offDx = 0; //0 when not included (spec ambiguous but see https://social.msdn.microsoft.com/Forums/en-US/29e46348-c2eb-44d5-8d1a-47c1ecdc68ff/msemf-emrtextdxbuffer-is-optional-how-to-specify-its-not-specified?forum=os_windowsprotocols)
+        emr.emrtext.str = iConvUTF8toUTF16LE(str);
+        emr.emrtext.nChars = emr.emrtext.str.length()/2;
+        emr.Write(m_File);
+
+        if (rot != 0) {
+            EMF::S_RESTOREDC emr;
+            emr.Write(m_File);
+        }
+    }
 }
 
 
@@ -656,11 +708,12 @@ static
 Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename, 
                          const char *bg, const char *fg,
                          double width, double height, double pointsize,
-                         const char *family, bool customLty)
+                         const char *family, bool customLty, bool emfPlus,
+                         bool emfpFont, bool emfpRaster)
 {
     CDevEMF *emf;
 
-    if (!(emf = new CDevEMF(customLty, family))) {
+    if (!(emf = new CDevEMF(family, customLty, emfPlus, emfpFont, emfpRaster))){
 	return FALSE;
     }
     dd->deviceSpecific = (void *) emf;
@@ -745,6 +798,9 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
  *  pointsize = default font size in points
  *  family  = default font family
  *  userLty = whether to use custom ("user") line textures
+ *  emfPlus = whether to use EMF+ format
+ *  emfpFont = whether to use EMF+ text records
+ *  emfpRaster = whether to use EMF+ raster records
  */
 extern "C" {
 SEXP devEMF(SEXP args)
@@ -752,7 +808,7 @@ SEXP devEMF(SEXP args)
     pGEDevDesc dd;
     const char *file, *bg, *fg, *family;
     double height, width, pointsize;
-    Rboolean userLty;
+    Rboolean userLty, emfPlus, emfpFont, emfpRaster;
 
     args = CDR(args); /* skip entry point name */
     file = Rf_translateChar(Rf_asChar(CAR(args))); args = CDR(args);
@@ -763,6 +819,9 @@ SEXP devEMF(SEXP args)
     pointsize = Rf_asReal(CAR(args));	     args = CDR(args);
     family = CHAR(Rf_asChar(CAR(args)));     args = CDR(args);
     userLty = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
+    emfPlus = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
+    emfpFont = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
+    emfpRaster = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
 
     R_CheckDeviceAvailable();
     BEGIN_SUSPEND_INTERRUPTS {
@@ -770,7 +829,7 @@ SEXP devEMF(SEXP args)
 	if (!(dev = (pDevDesc) calloc(1, sizeof(DevDesc))))
 	    return 0;
 	if(!EMFDeviceDriver(dev, file, bg, fg, width, height, pointsize,
-                            family, userLty)) {
+                            family, userLty, emfPlus, emfpFont, emfpRaster)) {
 	    free(dev);
 	    Rf_error("unable to start %s() device", "emf");
 	}
@@ -781,7 +840,7 @@ SEXP devEMF(SEXP args)
 }
 
     const R_ExternalMethodDef ExtEntries[] = {
-	{"devEMF", (DL_FUNC)&devEMF, 8},
+	{"devEMF", (DL_FUNC)&devEMF, 11},
 	{NULL, NULL, 0}
     };
     void R_init_EMF(DllInfo *dll) {
