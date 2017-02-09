@@ -202,8 +202,8 @@ namespace EMFPLUS {
             std::string buff; Serialize(buff);
             buff.resize(((buff.size() + 3)/4)*4, '\0'); //add padding
             std::string dataSize; dataSize << TUInt4(buff.size()-12);
-            std::string nSize; nSize << TUInt4(buff.size());
-            buff.replace(4,4, nSize);
+            std::string finalSize; finalSize << TUInt4(buff.size());
+            buff.replace(4,4, finalSize);
             buff.replace(8,4, dataSize);
             o.write(buff.data(), buff.size());
 
@@ -212,8 +212,8 @@ namespace EMFPLUS {
             // back up to Size field
             o.seekp(o.emfPlusStartPos - (std::streampos)12);
             buff.clear();
-            buff << TUInt4(currPos - o.emfPlusStartPos + 16)
-                 << TUInt4(currPos - o.emfPlusStartPos + 4);
+            buff << TUInt4((int)(currPos - o.emfPlusStartPos) + 16)
+                 << TUInt4((int)(currPos - o.emfPlusStartPos) + 4);
             o.write(buff.data(), buff.size());
             o.seekp(currPos);
 

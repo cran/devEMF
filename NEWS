@@ -1,3 +1,12 @@
+v3.3 -- 9 Feb 2017
+  -fix additional Solaris compiler errors & warnings
+  -add OSX linker option "-framework CoreText", which allows the
+   devEMF shared library to be loaded separately from standard R (and
+   hence pass cran checks).
+  -fix memory leak in EMF font handling (EMF+ was ok)
+  -fix memory leak in Windows GDI font metric code
+  -fix minor memory leak in Linux font metric code
+
 v3.2 -- 19 Sept 2016
   -add raster image support
   -embed devEMF version number in EMF output (in a comment field)

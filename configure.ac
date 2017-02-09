@@ -16,7 +16,9 @@ AC_SUBST(R_HOME)
 AC_LANG(C++)
 
 #-----------------------------------------------------------------------
-if test `uname -s` != "Darwin"; then #only necessary if NOT on OSX
+if test `uname -s` == "Darwin"; then # on OSX
+   LIBS="-framework CoreText"
+else  # if linux/unix (not OSX)
    AC_PATH_PROG([PKGCONF],[pkg-config],[],[$PATH:/usr/local/bin:ext/bin:ext:/sw/bin:/opt/bin])
 
    if test "xx$XFT_LIBS" == "xx"; then

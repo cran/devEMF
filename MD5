@@ -1,9 +1,9 @@
-022aa67114f1cfe7073d7945f738b2aa *DESCRIPTION
+073eab06f623d725c22f13a356c0fd74 *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-96c0ad6c89bbab06b5ce9e9c0fe33ef1 *NEWS
+0a22b321a1679b77093fae2d95275730 *NEWS
 16decca87c6d60a47dc5fa99cfc676b9 *R/emf.R
-a0852096ef1b0008d8c9526f21e5088e *configure
-de515e116c4ac3a5fccc25147448ed7e *configure.ac
+fdec67ed84e49c73bc62be0e130136d9 *configure
+0fbe1c6ee9dc92c76cb8d87a4d145142 *configure.ac
 d41d8cd98f00b204e9800998ecf8427e *configure.win
 5a270f26831f5aec6b11cf364f2fb847 *inst/afm/Courier-Bold-ucs.afm.gz
 898a49661ffa8d90bf6cc6468a6b6e10 *inst/afm/Courier-BoldOblique-ucs.afm.gz
@@ -25,7 +25,7 @@ f9915cd350562a616a5d1dfc130a678f *man/emf.Rd
 d62c4825a3abc101a04429d20703158d *src/Makevars.in
 b1c26a7aa76749fac4bd50d05b2184cd *src/Makevars.win
 123072c0ab25e4507030db3c8c8e4677 *src/devEMF.cpp
-175b80c0914a2bb161c8a5651ee5a16d *src/emf+.h
-8f507af63d67d40663e4d1ad51d62aa1 *src/emf.h
-83d2b9aa9cf7f44a61e035e5626b6524 *src/fontmetrics.h
+a48580da5302c687bda415dc29b2cd7e *src/emf+.h
+76b5c868e395f0bd5c831557c20b54f4 *src/emf.h
+bb793bcedcb81dee4906ddc6586f6c0e *src/fontmetrics.h
 1134814f3af5c7efb4341ffa01a761e7 *tools/subunicode.pl

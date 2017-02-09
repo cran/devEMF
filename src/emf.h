@@ -1,4 +1,4 @@
-/* $Id: emf.h 334 2017-02-03 17:01:03Z pjohnson $
+/* $Id: emf.h 335 2017-02-09 19:10:15Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -227,6 +227,10 @@ namespace EMF {
             return *this;
         }
 
+        bool operator< (const CLEType &other) const {
+            return memcmp(m_Val, other.m_Val, nBytes) < 0;
+        }
+        
         friend std::string& operator<< (std::string &o, const CLEType &d) {
             o.append(d.m_Val, nBytes);
             return o;
@@ -312,8 +316,8 @@ namespace EMF {
             ++o.nRecords;
             std::string buff; Serialize(buff);
             buff.resize(((buff.size() + 3)/4)*4, '\0'); //add padding
-            std::string nSize; nSize << TUInt4(buff.size());
-            buff.replace(4,4, nSize);
+            std::string finalSize; finalSize << TUInt4(buff.size());
+            buff.replace(4,4, finalSize);
             o.write(buff.data(), buff.size());
         }
 };
@@ -523,7 +527,7 @@ namespace EMF {
         SLogFont lf;
         
 	SFont(unsigned char face, int size, const std::string &familyUTF16) :
-            SObject(eEMR_EXTCREATEFONTINDIRECTW),m_SysFontInfo(NULL) {
+            SObject(eEMR_EXTCREATEFONTINDIRECTW), m_SysFontInfo(NULL) {
             lf.height = -size;//(-) matches against *character* height
             lf.width = 0;
             lf.escapement = 0;
@@ -540,6 +544,7 @@ namespace EMF {
             lf.pitchAndFamily = eFF_DONTCARE + eDEFAULT_PITCH;
             lf.SetFace(familyUTF16);
         }
+        ~SFont(void) { delete m_SysFontInfo; }
         std::string& Serialize(std::string &o) const {
             SObject::Serialize(o) << lf.height << lf.width
               << lf.escapement << lf.orientation << lf.weight
@@ -885,9 +890,7 @@ namespace EMF {
                     if (res != 0) return res < 0;
                     if (p1->elp.numEntries < p2->elp.numEntries) return true;
                     if (p1->elp.numEntries > p2->elp.numEntries) return false;
-                    return memcmp(p1->styleEntries.data(),
-                                  p2->styleEntries.data(),
-                                  p1->styleEntries.size() * 4) < 0;
+                    return p1->styleEntries < p2->styleEntries;
                 }
                 case eEMR_CREATEBRUSHINDIRECT:
                     return memcmp(&dynamic_cast<SBrush*>(o1)->lb,

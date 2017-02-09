@@ -278,6 +278,7 @@ struct SSysFontInfo {
         if (res != 0) {
             Riconv_close(cd);
             Rf_error("Text string not valid UTF-8");
+            delete[] ucs2Str;
             return 0;
         }
         Riconv_close(cd);
@@ -292,6 +293,7 @@ struct SSysFontInfo {
                 w += m->second.width;
             }
         }
+        delete[] ucs2Str;
         return w;
 #endif
     }
@@ -335,6 +337,7 @@ std::string SSysFontInfo::packagePath;
 
 struct SSysFontInfo {
     HDC m_DC;
+    HFONT m_FontHandle;
 
     SSysFontInfo(const char *family, int size, int face) {
         m_DC = GetDC(0);
@@ -354,8 +357,12 @@ struct SSysFontInfo {
         lf.lfQuality = DEFAULT_QUALITY;
         lf.lfPitchAndFamily = FF_DONTCARE + DEFAULT_PITCH;
         MultiByteToWideChar(CP_UTF8, 0, family, -1, lf.lfFaceName, LF_FACESIZE);
-        HFONT fontHandle = CreateFontIndirect(&lf);
-        SelectObject(m_DC, fontHandle);
+        m_FontHandle = CreateFontIndirect(&lf);
+        SelectObject(m_DC, m_FontHandle);
+    }
+    ~SSysFontInfo(void) {
+        DeleteObject(m_FontHandle);
+        ReleaseDC(0, m_DC);
     }
     bool HasChar(short unsigned int c) const {
         GLYPHMETRICS metrics;
