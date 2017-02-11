@@ -1,3 +1,9 @@
+v3.3-1 -- 10 Feb 2017
+  -fix edge case on linux where both Xft and zlib are installed but a
+   connection cannot be made to the X server (i.e., if running R from
+   ssh session without forwarding X connections)
+  -add cleanup script
+
 v3.3 -- 9 Feb 2017
   -fix additional Solaris compiler errors & warnings
   -add OSX linker option "-framework CoreText", which allows the

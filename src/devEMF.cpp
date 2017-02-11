@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 334 2017-02-03 17:01:03Z pjohnson $
+/* $Id: devEMF.cpp 336 2017-02-10 19:57:51Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -327,10 +327,15 @@ bool CDevEMF::Open(const char* filename, int width, int height)
             UNPROTECT(2);
             if (Rf_isVector(res)  &&  Rf_length(res) == 1  &&
                 Rf_isInteger(VECTOR_ELT(res,0))  &&
-                Rf_length(VECTOR_ELT(res,0)) == 2) {
+                Rf_length(VECTOR_ELT(res,0)) >= 1) {
                 std::ostringstream oss;
-                oss << INTEGER(VECTOR_ELT(res,0))[0] << "."
-                    << INTEGER(VECTOR_ELT(res,0))[1];
+                oss << INTEGER(VECTOR_ELT(res,0))[0];
+                if (Rf_length(VECTOR_ELT(res,0)) >= 2) {
+                    oss << "." << INTEGER(VECTOR_ELT(res,0))[1];
+                    if (Rf_length(VECTOR_ELT(res,0)) >= 3) {
+                        oss << "." << INTEGER(VECTOR_ELT(res,0))[2];
+                    }
+                }
                 ver = oss.str();
             }
         }

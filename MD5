@@ -1,7 +1,8 @@
-073eab06f623d725c22f13a356c0fd74 *DESCRIPTION
+59c306bb0bd5f06d3d05000df56adbd1 *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-0a22b321a1679b77093fae2d95275730 *NEWS
+f793d9e606c7b42fbc05f527270bbe89 *NEWS
 16decca87c6d60a47dc5fa99cfc676b9 *R/emf.R
+02601894a2ec1f5453f1135eed57ce09 *cleanup
 fdec67ed84e49c73bc62be0e130136d9 *configure
 0fbe1c6ee9dc92c76cb8d87a4d145142 *configure.ac
 d41d8cd98f00b204e9800998ecf8427e *configure.win
@@ -24,8 +25,8 @@ f57c9be7d2e5fc17a263cb40b05fd793 *inst/afm/Times-Roman-ucs.afm.gz
 f9915cd350562a616a5d1dfc130a678f *man/emf.Rd
 d62c4825a3abc101a04429d20703158d *src/Makevars.in
 b1c26a7aa76749fac4bd50d05b2184cd *src/Makevars.win
-123072c0ab25e4507030db3c8c8e4677 *src/devEMF.cpp
+1c013520d5e484981711fc4fd0c764c1 *src/devEMF.cpp
 a48580da5302c687bda415dc29b2cd7e *src/emf+.h
 76b5c868e395f0bd5c831557c20b54f4 *src/emf.h
-bb793bcedcb81dee4906ddc6586f6c0e *src/fontmetrics.h
+dd3f0beb51b9a70deec36107e0b5eba2 *src/fontmetrics.h
 1134814f3af5c7efb4341ffa01a761e7 *tools/subunicode.pl

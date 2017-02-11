@@ -116,6 +116,7 @@ struct SSysFontInfo {
         }
 #endif
 #ifdef HAVE_XFT
+        m_FontInfo = NULL;
         if (!s_XDisplay) {
             s_XDisplay = XOpenDisplay(NULL);
             if (!s_XDisplay) {
@@ -130,19 +131,21 @@ struct SSysFontInfo {
 #endif
 
 #ifdef HAVE_XFT
-        m_FontInfo = XftFontOpen
-            (s_XDisplay, XDefaultScreen(s_XDisplay),
-             XFT_FAMILY, XftTypeString, family.c_str(),
-             XFT_PIXEL_SIZE, XftTypeInteger, size,
-             XFT_SLANT, XftTypeInteger, (face == 3  || face == 4 ?
-                                         XFT_SLANT_ITALIC :
-                                         XFT_SLANT_ROMAN),
-             XFT_WEIGHT, XftTypeInteger, (face == 2  ||  face == 4 ?
-                                          XFT_WEIGHT_BOLD :
-                                          XFT_WEIGHT_MEDIUM),
-             NULL);
-        if (m_FontInfo) {
-            return;
+        if (s_XDisplay) {
+            m_FontInfo = XftFontOpen
+                (s_XDisplay, XDefaultScreen(s_XDisplay),
+                 XFT_FAMILY, XftTypeString, family.c_str(),
+                 XFT_PIXEL_SIZE, XftTypeInteger, size,
+                 XFT_SLANT, XftTypeInteger, (face == 3  || face == 4 ?
+                                             XFT_SLANT_ITALIC :
+                                             XFT_SLANT_ROMAN),
+                 XFT_WEIGHT, XftTypeInteger, (face == 2  ||  face == 4 ?
+                                              XFT_WEIGHT_BOLD :
+                                              XFT_WEIGHT_MEDIUM),
+                 NULL);
+            if (m_FontInfo) {
+                return;
+            }
         }
 #endif
 #ifdef HAVE_ZLIB
@@ -170,7 +173,9 @@ struct SSysFontInfo {
     }
 #ifdef HAVE_XFT
     ~SSysFontInfo() {
-        XftFontClose(s_XDisplay, m_FontInfo);
+        if (m_FontInfo) {
+            XftFontClose(s_XDisplay, m_FontInfo);
+        }
     }
 #endif
 
