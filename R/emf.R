@@ -15,10 +15,11 @@
 
 emf <- function(file = "Rplot.emf", width=7, height=7,
                 bg = "transparent", fg = "black", pointsize=12,
-                family = "Helvetica", custom.lty=emfPlus, emfPlus=TRUE,
+                family = "Helvetica", coordDPI = 300,
+                custom.lty=emfPlus, emfPlus=TRUE,
                 emfPlusFont = FALSE, emfPlusRaster = FALSE)
 {
-  .External('devEMF', PACKAGE='devEMF', file, bg, fg, width, height, pointsize,
-            family, custom.lty, emfPlus, emfPlusFont, emfPlusRaster)
+  .External(devEMF, file, bg, fg, width, height, pointsize,
+            family, coordDPI, custom.lty, emfPlus, emfPlusFont, emfPlusRaster)
   invisible()
 }

@@ -365,7 +365,7 @@ namespace EMFPLUS {
         TUInt4 startCap;
         TUInt4 endCap;
         TUInt4 join;
-        TUInt4 miterLimit;
+        TFloat4 miterLimit;
         TUInt4 lineStyle;
         TUInt4 dashedCap;
         std::vector<double> dashedLineData; //for custom line style
@@ -706,7 +706,7 @@ namespace EMFPLUS {
         default: break;//actually of range, but R doesn't complain..
         }
 
-        pen.miterLimit = lmitre*ps2dev;
+        pen.miterLimit = lmitre;
     }
 
     struct ObjectPtrCmp {

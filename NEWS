@@ -1,3 +1,15 @@
+v3.4 -- 7 April 2017
+  -add option for user to specify DPI used when setting up device
+   coordinate system.  Previously was fixed at one dot per 0.01mm (aka
+   2540 DPI; 0.01mm units are used elsewhere by EMF), but some lazy
+   EMF clients appear to render the image as a bitmap of size equal to
+   inches * DPI.. which can lead to out of memory errors.  Changing
+   default to be 300 DPI.
+  -fix handling of miter limit for miter-type line joins in EMF+ files.
+  -correct R_init_* registration entrypoint name
+  -use registered R symbol as entrypoint in .External call
+  -fix PROTECT error (thanks to Tomas Kalibera's tool for identifying)
+
 v3.3-1 -- 10 Feb 2017
   -fix edge case on linux where both Xft and zlib are installed but a
    connection cannot be made to the X server (i.e., if running R from

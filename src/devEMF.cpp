@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 336 2017-02-10 19:57:51Z pjohnson $
+/* $Id: devEMF.cpp 340 2017-04-14 19:51:31Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -51,13 +51,14 @@ using namespace std;
 
 class CDevEMF {
 public:
-    CDevEMF(const char *defaultFontFamily, bool customLty, bool emfPlus,
-            bool emfpFont, bool emfpRaster) :
+    CDevEMF(const char *defaultFontFamily, int coordDPI, bool customLty,
+            bool emfPlus, bool emfpFont, bool emfpRaster) :
         m_debug(false) {
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
         m_NumRecords = 0;
         m_CurrHadj = m_CurrTextCol = m_CurrPolyFill = -1;
+        m_CoordDPI = coordDPI;
         //feature options
         m_UseCustomLty = customLty;
         m_UseEMFPlus = emfPlus;
@@ -89,8 +90,8 @@ public:
                 double width, double height, double rot,
                 Rboolean interpolate);
 
-    // global helper functions
-    static int x_Inches2Dev(double inches) { return 2540*inches;}
+    // helper functions
+    int Inches2Dev(double inches) { return m_CoordDPI*inches;}
     static double x_EffPointsize(const pGEcontext gc) {
         return floor(gc->cex * gc->ps + 0.5);
     }
@@ -125,10 +126,10 @@ private:
     unsigned char x_GetPen(const pGEcontext gc) {
         return m_UseEMFPlus ?
             m_ObjectTable.GetPen(gc->col, gc->lwd*72./96., gc->lty, gc->lend,
-                                 gc->ljoin, gc->lmitre, x_Inches2Dev(1)/72.,
+                                 gc->ljoin, gc->lmitre, Inches2Dev(1)/72.,
                                  m_UseCustomLty, m_File) :
             m_ObjectTableEMF.GetPen(gc->col, gc->lwd*72./96., gc->lty, gc->lend,
-                                    gc->ljoin, gc->lmitre, x_Inches2Dev(1)/72.,
+                                    gc->ljoin, gc->lmitre, Inches2Dev(1)/72.,
                                     m_UseCustomLty, m_File);
     }
     unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
@@ -139,10 +140,10 @@ private:
             m_DefaultFontFamily.c_str();
         //emf+ font support is incomplete in LibreOffice (rotations are buggy)
         return m_UseEMFPlus  &&  m_UseEMFPlusFont ?
-            m_ObjectTable.GetFont(face, x_Inches2Dev(x_EffPointsize(gc)/72),
+            m_ObjectTable.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
                                   family, iConvUTF8toUTF16LE(family),
                                   m_File, info) :
-            m_ObjectTableEMF.GetFont(face, x_Inches2Dev(x_EffPointsize(gc)/72),
+            m_ObjectTableEMF.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
                                      family, iConvUTF8toUTF16LE(family),
                                      m_File, info);
     }
@@ -154,6 +155,7 @@ private:
     int m_PageNum;
     int m_Width, m_Height;
     string m_DefaultFontFamily;
+    int m_CoordDPI;
     bool m_UseCustomLty;
     bool m_UseEMFPlus;
     bool m_UseEMFPlusFont;
@@ -287,7 +289,7 @@ double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
     double width =  info ? info->GetStrWidth(str) : 0;
 
     if (m_debug) Rprintf("%f\n", width);
-    //cout << "strwidth: " << width/CDevEMF::x_Inches2Dev(1) << endl;
+    //cout << "strwidth: " << width/Inches2Dev(1) << endl;
     return width;
 }
 
@@ -308,8 +310,8 @@ bool CDevEMF::Open(const char* filename, int width, int height)
         EMF::SHeader emr;
         emr.bounds.Set(0,0,m_Width,m_Height); //device units
         emr.frame.Set(0,0, // units of 0.01mm
-                      2540*m_Width/x_Inches2Dev(1),
-                      2540*m_Height/x_Inches2Dev(1)); 
+                      2540*m_Width/Inches2Dev(1),
+                      2540*m_Height/Inches2Dev(1)); 
         emr.signature = 0x464D4520;
         emr.version = 0x00010000;
         emr.nBytes = 0;   //WILL EDIT WHEN CLOSING
@@ -318,13 +320,12 @@ bool CDevEMF::Open(const char* filename, int width, int height)
         emr.reserved = 0x0000;
         string ver = "?"; // devEMF version
         {//find version using R "packageVersion" function
-            SEXP packageVer, call;
+            SEXP packageVer, call, res;
             PROTECT(packageVer = Rf_findFun(Rf_install("packageVersion"),
                                             R_GlobalEnv));
             PROTECT(call = Rf_lang2(packageVer, Rf_ScalarString
                                     (Rf_mkChar("devEMF"))));
-            SEXP res = Rf_eval(call, R_GlobalEnv);
-            UNPROTECT(2);
+            PROTECT(res = Rf_eval(call, R_GlobalEnv));
             if (Rf_isVector(res)  &&  Rf_length(res) == 1  &&
                 Rf_isInteger(VECTOR_ELT(res,0))  &&
                 Rf_length(VECTOR_ELT(res,0)) >= 1) {
@@ -338,6 +339,7 @@ bool CDevEMF::Open(const char* filename, int width, int height)
                 }
                 ver = oss.str();
             }
+            UNPROTECT(3);
         }
         //Description string must be UTF-16LE
         emr.desc = iConvUTF8toUTF16LE("Created by R using devEMF ver. "+ver);
@@ -345,13 +347,13 @@ bool CDevEMF::Open(const char* filename, int width, int height)
         emr.offDescription = 0; //set during serialization
         emr.nPalEntries = 0;
         emr.device.Set(m_Width,m_Height);
-        emr.millimeters.Set(m_Width * (25.4/x_Inches2Dev(1)),
-                            m_Height * (25.4/x_Inches2Dev(1)));
+        emr.millimeters.Set(m_Width * (25.4/Inches2Dev(1)),
+                            m_Height * (25.4/Inches2Dev(1)));
         emr.cbPixelFormat=0x00000000;
         emr.offPixelFormat=0x00000000;
         emr.bOpenGL=0x00000000;
-        emr.micrometers.Set(m_Width * (25400/x_Inches2Dev(1)),
-                            m_Height * (25400/x_Inches2Dev(1)));
+        emr.micrometers.Set(m_Width * (25400/Inches2Dev(1)),
+                            m_Height * (25400/Inches2Dev(1)));
         emr.Write(m_File);
     }
 
@@ -359,8 +361,8 @@ bool CDevEMF::Open(const char* filename, int width, int height)
         {
             EMFPLUS::SHeader emr;
             emr.plusFlags = 0; //specifies for video display context
-            emr.dpiX = x_Inches2Dev(1);
-            emr.dpiY = x_Inches2Dev(1);
+            emr.dpiX = Inches2Dev(1);
+            emr.dpiY = Inches2Dev(1);
             emr.Write(m_File);
         }
         { // page transform (1 pixel == 1 device unit)
@@ -713,12 +715,13 @@ static
 Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename, 
                          const char *bg, const char *fg,
                          double width, double height, double pointsize,
-                         const char *family, bool customLty, bool emfPlus,
-                         bool emfpFont, bool emfpRaster)
+                         const char *family, int coordDPI, bool customLty,
+                         bool emfPlus, bool emfpFont, bool emfpRaster)
 {
     CDevEMF *emf;
 
-    if (!(emf = new CDevEMF(family, customLty, emfPlus, emfpFont, emfpRaster))){
+    if (!(emf = new CDevEMF(family, coordDPI, customLty, emfPlus, emfpFont,
+                            emfpRaster))){
 	return FALSE;
     }
     dd->deviceSpecific = (void *) emf;
@@ -766,14 +769,14 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
 
     /* Screen Dimensions in device coordinates */
     dd->left = 0;
-    dd->right = CDevEMF::x_Inches2Dev(width);
+    dd->right = emf->Inches2Dev(width);
     dd->bottom = 0;
-    dd->top = CDevEMF::x_Inches2Dev(height);
+    dd->top = emf->Inches2Dev(height);
 
     /* Base Pointsize */
     /* Nominal Character Sizes in device units */
-    dd->cra[0] = CDevEMF::x_Inches2Dev(0.9 * pointsize/72);
-    dd->cra[1] = CDevEMF::x_Inches2Dev(1.2 * pointsize/72);
+    dd->cra[0] = emf->Inches2Dev(0.9 * pointsize/72);
+    dd->cra[1] = emf->Inches2Dev(1.2 * pointsize/72);
 
     /* Character Addressing Offsets */
     /* These offsets should center a single */
@@ -784,7 +787,7 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     dd->yLineBias = 0.2;
 
     /* Inches per device unit */
-    dd->ipr[0] = dd->ipr[1] = 1./CDevEMF::x_Inches2Dev(1);
+    dd->ipr[0] = dd->ipr[1] = 1./emf->Inches2Dev(1);
 
 
     if (!emf->Open(filename, dd->right, dd->top)) 
@@ -814,6 +817,7 @@ SEXP devEMF(SEXP args)
     const char *file, *bg, *fg, *family;
     double height, width, pointsize;
     Rboolean userLty, emfPlus, emfpFont, emfpRaster;
+    int coordDPI;
 
     args = CDR(args); /* skip entry point name */
     file = Rf_translateChar(Rf_asChar(CAR(args))); args = CDR(args);
@@ -823,6 +827,7 @@ SEXP devEMF(SEXP args)
     height = Rf_asReal(CAR(args));	     args = CDR(args);
     pointsize = Rf_asReal(CAR(args));	     args = CDR(args);
     family = CHAR(Rf_asChar(CAR(args)));     args = CDR(args);
+    coordDPI = Rf_asInteger(CAR(args));     args = CDR(args);
     userLty = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
     emfPlus = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
     emfpFont = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
@@ -834,7 +839,8 @@ SEXP devEMF(SEXP args)
 	if (!(dev = (pDevDesc) calloc(1, sizeof(DevDesc))))
 	    return 0;
 	if(!EMFDeviceDriver(dev, file, bg, fg, width, height, pointsize,
-                            family, userLty, emfPlus, emfpFont, emfpRaster)) {
+                            family, coordDPI, userLty, emfPlus, emfpFont,
+                            emfpRaster)) {
 	    free(dev);
 	    Rf_error("unable to start %s() device", "emf");
 	}
@@ -845,10 +851,10 @@ SEXP devEMF(SEXP args)
 }
 
     const R_ExternalMethodDef ExtEntries[] = {
-	{"devEMF", (DL_FUNC)&devEMF, 11},
+	{"devEMF", (DL_FUNC)&devEMF, 12},
 	{NULL, NULL, 0}
     };
-    void R_init_EMF(DllInfo *dll) {
+    void R_init_devEMF(DllInfo *dll) {
 	R_registerRoutines(dll, NULL, NULL, NULL, ExtEntries);
 	R_useDynamicSymbols(dll, FALSE);
     }

@@ -9,11 +9,13 @@
   graphics in both LibreOffice and Microsoft Office.
 }
 \usage{
+
 emf(file = "Rplot.emf", width = 7, height = 7,
     bg = "transparent", fg = "black", pointsize = 12,
-    family = "Helvetica", custom.lty=emfPlus, emfPlus=TRUE,
-    emfPlusFont = FALSE, emfPlusRaster = FALSE)
+    family = "Helvetica", coordDPI = 300, custom.lty=emfPlus,
+    emfPlus=TRUE, emfPlusFont = FALSE, emfPlusRaster = FALSE)
 }
+
 \arguments{
   \item{file}{character string giving the name of file.}
   \item{width}{width of plot in inches.}
@@ -23,6 +25,8 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   \item{fg}{initial foreground color to be used.}
   \item{pointsize}{default font point size to be used.}
   \item{family}{default font family to be used.}
+  \item{coordDPI}{DPI used for coordinate system (while EMF is a vector
+    format, it (and R) use discrete coordinate systems).}
   \item{custom.lty}{logical: if false, approximate R line types with EMF
     standard line types (any program that imports EMF should support
     this).  If true, use exact (custom) R line type, which is only

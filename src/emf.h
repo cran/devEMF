@@ -1,4 +1,4 @@
-/* $Id: emf.h 335 2017-02-09 19:10:15Z pjohnson $
+/* $Id: emf.h 338 2017-02-18 05:01:01Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -930,9 +930,10 @@ namespace EMF {
                              bool useUserLty, EMF::ofstream &out) {
             SPen *pen = new SPen(col, lwd, lty, lend, ljoin, ps2dev,
                                  useUserLty);
-            if ((int) lmitre != m_CurrMiterLimit) {
+            if (ljoin == GE_MITRE_JOIN  &&
+                (int) lmitre != m_CurrMiterLimit) {
                 S_SETMITERLIMIT emr;
-                emr.miterLimit = lmitre*ps2dev;
+                emr.miterLimit = lmitre;
                 emr.Write(out);
                 m_CurrMiterLimit = lmitre;
             }
