@@ -1,4 +1,4 @@
-/* $Id: emf.h 338 2017-02-18 05:01:01Z pjohnson $
+/* $Id: emf.h 341 2017-06-09 18:54:26Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -72,6 +72,8 @@ namespace EMF {
         eEMR_RECTANGLE = 43,
         eEMR_SETMITERLIMIT = 58,
         eEMR_COMMENT = 70,
+        eEMR_EXTSELECTCLIPRGN = 0x4B,
+        eEMR_INTERSECTCLIPRECT = 0x1E,
         eEMR_STRETCHBLT = 77,
         eEMR_STRETCHDIBITS = 81,
         eEMR_EXTCREATEFONTINDIRECTW = 82,
@@ -699,6 +701,23 @@ namespace EMF {
         }
     };
 
+    struct S_EXTSELECTCLIPRGN : SRecord {
+        //NOT FULLY IMPLEMENTED (JUST RESETS TO DEFAULT)
+        S_EXTSELECTCLIPRGN(void) : SRecord(eEMR_EXTSELECTCLIPRGN) {}
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << TUInt4(0) << TUInt4(5);
+        }
+    };
+
+    struct S_INTERSECTCLIPRECT : SRecord {
+        SRect rect;
+        S_INTERSECTCLIPRECT(double x0, double y0, double x1, double y1) :
+            SRecord(eEMR_INTERSECTCLIPRECT) { rect.Set(x0,y0,x1,y1); }
+	std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << rect;
+        }
+    };
+
     struct S_SETSTRETCHBLTMODE : SRecord {
         TUInt4 mode;
         S_SETSTRETCHBLTMODE(int m) : SRecord(eEMR_SETSTRETCHBLTMODE) {
@@ -946,9 +965,12 @@ namespace EMF {
         unsigned char GetFont(unsigned char face, int size,
                               const std::string &familyUTF8,
                               const std::string &familyUTF16,
+                              bool selectFont,
                               EMF::ofstream &out, SSysFontInfo **fontInf) {
             SFont *font = new SFont(face, size, familyUTF16);
-            SObject *obj = x_SelectObject(font, out);
+            SObject *obj = selectFont ?
+                x_SelectObject(font, out) :
+                x_GetObject(font, out);
             font = dynamic_cast<SFont*>(obj);
             if (font->m_SysFontInfo == NULL) {
                 font->m_SysFontInfo = new SSysFontInfo(familyUTF8.c_str(),
@@ -957,10 +979,10 @@ namespace EMF {
             if (fontInf) {
                 *fontInf = font->m_SysFontInfo;
             }
-            return obj->m_ObjId;
+            return (selectFont ? obj->m_ObjId : 0);//flag if not selected
         }
     private:
-        SObject* x_SelectObject(SObject *obj, EMF::ofstream &out) {
+        SObject* x_GetObject(SObject *obj, EMF::ofstream &out) {
             TIndex::iterator i = m_Objects.find(obj);
             if (i == m_Objects.end()) {
                 i = m_Objects.insert(obj).first;
@@ -969,13 +991,17 @@ namespace EMF {
             } else {
                 delete obj;
             }
-            if (m_CurrObj[(*i)->iType] != (int)(*i)->m_ObjId) {
-                S_SELECTOBJECT emr;
-                emr.ihObject = (*i)->m_ObjId;
-                emr.Write(out);
-                m_CurrObj[(*i)->iType] = (*i)->m_ObjId;
-            }
             return (*i);
+        }
+        SObject* x_SelectObject(SObject *obj, EMF::ofstream &out) {
+            obj = x_GetObject(obj, out);
+            if (m_CurrObj[obj->iType] != (int)obj->m_ObjId) {
+                S_SELECTOBJECT emr;
+                emr.ihObject = obj->m_ObjId;
+                emr.Write(out);
+                m_CurrObj[obj->iType] = obj->m_ObjId;
+            }
+            return obj;
         }
     private:
         typedef std::set<SObject*, ObjectPtrCmp> TIndex;        

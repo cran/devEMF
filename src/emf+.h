@@ -59,7 +59,8 @@ namespace EMFPLUS {
         eRcdSetWorldTransform = 0x402A,
         eRcdResetWorldTransform = 0x402B,
         eRcdMultiplyWorldTransform = 0x402C,
-        eRcdSetPageTransform = 0x4030
+        eRcdSetPageTransform = 0x4030,
+        eRcdSetClipRect = 0x4032
     };
 
     enum EObjectType {
@@ -142,6 +143,15 @@ namespace EMFPLUS {
         ePixelOffsetModeHighQuality = 2,
         ePixelOffsetModeNone = 3,
         ePixelOffsetModeHalf = 4
+    };
+
+    enum ECombineMode {
+        eCombineModeReplace = 0,
+        eCombineModeIntersect = 1,
+        eCombineModeUnion = 2,
+        eCombineModeXOR = 3,
+        eCombineModeExclude = 4,
+        eCombineModeComplement = 5
     };
 
     // ------------------------------------------------------------------------
@@ -331,6 +341,20 @@ namespace EMFPLUS {
             SRecord(eRcdSetPageTransform) { iFlags = u; m_Scale = s;}
         std::string& Serialize(std::string &o) const {
             return SRecord::Serialize(o) << m_Scale;
+        }
+    };
+
+    struct SSetClipRect : SRecord {
+        SRectF m_Rect;
+        SSetClipRect(ECombineMode cm,
+                     double x0, double y0, double x1, double y1) :
+        SRecord(eRcdSetClipRect) { iFlags = cm << 8;
+                m_Rect.x = x0;
+                m_Rect.y = y0;
+                m_Rect.w = x1-x0;
+                m_Rect.h = y1-y0;}
+        std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << m_Rect;
         }
     };
 

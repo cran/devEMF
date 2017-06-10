@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 340 2017-04-14 19:51:31Z pjohnson $
+/* $Id: devEMF.cpp 341 2017-06-09 18:54:26Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -58,6 +58,7 @@ public:
         m_PageNum = 0;
         m_NumRecords = 0;
         m_CurrHadj = m_CurrTextCol = m_CurrPolyFill = -1;
+        m_CurrClip[0] = m_CurrClip[1] = m_CurrClip[2] = m_CurrClip[3] = -1;
         m_CoordDPI = coordDPI;
         //feature options
         m_UseCustomLty = customLty;
@@ -133,7 +134,8 @@ private:
                                     m_UseCustomLty, m_File);
     }
     unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
-                            const char *fontfamily = NULL) {
+                            const char *fontfamily = NULL,
+                            bool selectFont = false) {
         int face = (gc->fontface < 1  || gc->fontface > 4) ? 1 : gc->fontface;
         const char *family = fontfamily ? fontfamily :
             gc->fontfamily[0] != '\0' ? gc->fontfamily :
@@ -145,7 +147,7 @@ private:
                                   m_File, info) :
             m_ObjectTableEMF.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
                                      family, iConvUTF8toUTF16LE(family),
-                                     m_File, info);
+                                     selectFont, m_File, info);
     }
 
 private:
@@ -165,6 +167,7 @@ private:
     double m_CurrHadj;
     int m_CurrTextCol;
     int m_CurrPolyFill;
+    double m_CurrClip[4];
 
     //EMF/EMF+ objects
     EMFPLUS::CObjectTable m_ObjectTable;
@@ -415,6 +418,31 @@ void CDevEMF::NewPage(const pGEcontext gc) {
 void CDevEMF::Clip(double x0, double x1, double y0, double y1)
 {
     if (m_debug) Rprintf("clip %f,%f,%f,%f\n", x0,y0,x1,y1);
+    if ((m_CurrClip[0] == x0  &&
+         m_CurrClip[1] == y0  &&
+         m_CurrClip[2] == x1  &&
+         m_CurrClip[3] == y1  &&
+         m_CurrClip[0] != -1  &&
+         m_CurrClip[1] != -1  &&
+         m_CurrClip[2] != -1  &&
+         m_CurrClip[3] != -1)) {
+        return; //skip if unchanged
+    }
+    m_CurrClip[0] = x0;
+    m_CurrClip[1] = y0;
+    m_CurrClip[2] = x1;
+    m_CurrClip[3] = y1;
+    x_TransformY(&y0, 1);
+    x_TransformY(&y1, 1);
+    if (m_UseEMFPlus) {
+        EMFPLUS::SSetClipRect clip(EMFPLUS::eCombineModeReplace, x0,y0,x1,y1);
+        clip.Write(m_File);
+    } else {
+        EMF::S_EXTSELECTCLIPRGN rgn;//reset to default
+        rgn.Write(m_File);
+        EMF::S_INTERSECTCLIPRECT rect(x0,y0,x1,y1);
+        rect.Write(m_File);
+    }
     return;
 }
 
@@ -494,19 +522,18 @@ void CDevEMF::Raster(unsigned int* r, int w, int h, double x, double y,
         }
         */
         if (rot != 0) {
-            EMF::S_SAVEDC emr1;
-            emr1.Write(m_File);
-            EMF::S_MODIFYWORLDTRANSFORM emr2(EMF::eMWT_LEFTMULTIPLY);
-            emr2.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
-                           sin(rot*M_PI/180), cos(rot*M_PI/180),
+            EMF::S_SETWORLDTRANSFORM emr;
+            emr.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                          sin(rot*M_PI/180), cos(rot*M_PI/180),
                           x, y+height);
-            emr2.Write(m_File);
+            emr.Write(m_File);
             x = 0; y = -height; //rotate around ll corner
         }
         EMF::S_STRETCHBLT bmp(r, w,h,x,y,width,height);
         bmp.Write(m_File);
         if (rot != 0) {
-            EMF::S_RESTOREDC emr;
+            EMF::S_SETWORLDTRANSFORM emr;
+            emr.xform.Set(1,0,0,1, 0,0);
             emr.Write(m_File);
         }
     }
@@ -641,7 +668,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
 
     SSysFontInfo *info;
-    unsigned char fontId = x_GetFont(gc, &info);
+    unsigned char fontId = x_GetFont(gc, &info, NULL, true);
     //Sigh.. as of 2016 because LibreOffice EMF+ has buggy support of transformations to fonts (e.g., shrinks instead of rotates!)
     if (m_UseEMFPlus  &&  m_UseEMFPlusFont) {
         if (rot != 0) {
@@ -669,13 +696,11 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         }
     } else {
         if (rot != 0) {
-            EMF::S_SAVEDC emr1;
-            emr1.Write(m_File);
-            EMF::S_MODIFYWORLDTRANSFORM emr2(EMF::eMWT_LEFTMULTIPLY);
-            emr2.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
-                           sin(rot*M_PI/180), cos(rot*M_PI/180),
+            EMF::S_SETWORLDTRANSFORM emr;
+            emr.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
+                          sin(rot*M_PI/180), cos(rot*M_PI/180),
                           x, y);
-            emr2.Write(m_File);
+            emr.Write(m_File);
             x = 0; y = 0; //because already translated!
         }
 
@@ -704,7 +729,8 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         emr.Write(m_File);
 
         if (rot != 0) {
-            EMF::S_RESTOREDC emr;
+            EMF::S_SETWORLDTRANSFORM emr;
+            emr.xform.Set(1,0,0,1, 0,0);
             emr.Write(m_File);
         }
     }
@@ -762,7 +788,7 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     dd->strWidthUTF8   = EMFcb::StrWidth;
     dd->wantSymbolUTF8 = TRUE;
     dd->useRotatedTextInContour = TRUE;
-    dd->canClip = FALSE;
+    dd->canClip = TRUE;
     dd->canHAdj = 1;
     dd->canChangeGamma = FALSE;
     dd->displayListOn = FALSE;

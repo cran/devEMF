@@ -1,3 +1,16 @@
+v3.5 -- 8 June 2017
+  -implement clipping at emf/emf+ level (previously relied on R to
+   clip, which is more aggressive, particularly with regard to text,
+   and led to difference between EMF output vs. other devices)
+  -only issue select object command for EMF font immediately before writing
+   text (previously issued when first requested font metrics, which was not
+   necessary)
+  -change EMF world rotation commands to avoid depending on
+   SAVE/RESTORE DC (which is unclear from spec whether it is supposed
+   to save world rotation state).  This change avoids a bug triggered
+   when printing figures with rotated text in Word 2010 (Thanks to
+   Philip Harslett for reporting)
+
 v3.4 -- 7 April 2017
   -add option for user to specify DPI used when setting up device
    coordinate system.  Previously was fixed at one dot per 0.01mm (aka

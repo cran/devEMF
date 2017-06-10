@@ -1,6 +1,6 @@
-ac627ddd9d5d209c5ab451085b78a9dc *DESCRIPTION
+f4d8fd154dc9eb65eeb04a8556ec1c00 *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-13e89005c757037d65b12a928196f500 *NEWS
+bf9458b31a8c7b1553047b5fd02508a7 *NEWS
 1aad4661ae323ba6a2ddaa63affd7e4b *R/emf.R
 02601894a2ec1f5453f1135eed57ce09 *cleanup
 fdec67ed84e49c73bc62be0e130136d9 *configure
@@ -22,11 +22,11 @@ dc8c40eda785d17cf02fb0f6c091b7b1 *inst/afm/README
 61ba97ca89bf3b5c24dca96838c9ebec *inst/afm/Times-Italic-ucs.afm.gz
 f57c9be7d2e5fc17a263cb40b05fd793 *inst/afm/Times-Roman-ucs.afm.gz
 7641b9981107280a17fd6b824904f4ad *inst/afm/ZapfDingbats-ucs.afm.gz
-d037b8eaa4046b4aeccf0faaee759b6c *man/emf.Rd
+cdbf1f5f6380137607bcb140bd7dbc47 *man/emf.Rd
 d62c4825a3abc101a04429d20703158d *src/Makevars.in
 b1c26a7aa76749fac4bd50d05b2184cd *src/Makevars.win
-a1a1442e2ff870edb3c73001a738e7d0 *src/devEMF.cpp
-4f10e5b308825987276674154928d967 *src/emf+.h
-f22ff87864d74eec181ec014a6d9cd9a *src/emf.h
+3aa040de7491d6718d6d1a1bdddd523a *src/devEMF.cpp
+85a4dcd1473836754a82e5b9d7cb7359 *src/emf+.h
+0dc24540063ab1e9a7cb728be49e7549 *src/emf.h
 dd3f0beb51b9a70deec36107e0b5eba2 *src/fontmetrics.h
 1134814f3af5c7efb4341ffa01a761e7 *tools/subunicode.pl

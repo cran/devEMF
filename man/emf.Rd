@@ -76,9 +76,6 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   interpolation control.
     \item EMF (as opposed to EMF+) does not support an alpha channel.
     \item Path rendering is not implemented for EMF (as opposed to EMF+).
-    \item Clipping is not implemented, since R \emph{appears} to take
-  care of this; however, if you see a problem that could be the result a
-  clipping bug, please contact the author.
   }
 }
 \author{
