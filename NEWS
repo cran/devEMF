@@ -1,5 +1,13 @@
+v3.6 -- 21 July 2017
+  -for rotated text in EMF (as opposed to EMF+), insert rotation into
+   font specification rather than using world transform.  This change
+   makes for more ungainly files but greater compatibility with
+   viewing programs that only support a subset of the EMF specification.
+  -fix roundoff error when calculating page size in micrometers (in
+   EMF header; unclear if used by any viewing program)
+
 v3.5 -- 8 June 2017
-  -implement clipping at emf/emf+ level (previously relied on R to
+  -implement clipping at EMF/EMF+ level (previously relied on R to
    clip, which is more aggressive, particularly with regard to text,
    and led to difference between EMF output vs. other devices)
   -only issue select object command for EMF font immediately before writing

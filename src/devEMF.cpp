@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 341 2017-06-09 18:54:26Z pjohnson $
+/* $Id: devEMF.cpp 344 2017-07-24 15:17:27Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -135,7 +135,7 @@ private:
     }
     unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
                             const char *fontfamily = NULL,
-                            bool selectFont = false) {
+                            bool selectFont = false, double rot = 0) {
         int face = (gc->fontface < 1  || gc->fontface > 4) ? 1 : gc->fontface;
         const char *family = fontfamily ? fontfamily :
             gc->fontfamily[0] != '\0' ? gc->fontfamily :
@@ -147,6 +147,7 @@ private:
                                   m_File, info) :
             m_ObjectTableEMF.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
                                      family, iConvUTF8toUTF16LE(family),
+                                     rot,
                                      selectFont, m_File, info);
     }
 
@@ -355,8 +356,8 @@ bool CDevEMF::Open(const char* filename, int width, int height)
         emr.cbPixelFormat=0x00000000;
         emr.offPixelFormat=0x00000000;
         emr.bOpenGL=0x00000000;
-        emr.micrometers.Set(m_Width * (25400/Inches2Dev(1)),
-                            m_Height * (25400/Inches2Dev(1)));
+        emr.micrometers.Set(m_Width * (25400./Inches2Dev(1)),
+                            m_Height * (25400./Inches2Dev(1)));
         emr.Write(m_File);
     }
 
@@ -513,12 +514,11 @@ void CDevEMF::Raster(unsigned int* r, int w, int h, double x, double y,
         /* Unfortunately, I can't figure out a interpolation control
            for EMF -- so this seems to leave it up to the client
            program (generally seems sort of linear interpolation) The
-           following lines look like they might work.. but don't
+           following lines look like they might work.. but don't.
+           Also tried with BITBLT instead of STRETCHBLT.  No luck either.
         if (!interpolate) {
            EMF::S_SETSTRETCHBLTMODE m1(3);
            m1.Write(m_File);
-           EMF::S_SETBRUSHORGEX m2(0,0);
-           m2.Write(m_File);
         }
         */
         if (rot != 0) {
@@ -668,7 +668,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
 
     SSysFontInfo *info;
-    unsigned char fontId = x_GetFont(gc, &info, NULL, true);
+    unsigned char fontId = x_GetFont(gc, &info, NULL, true, rot);
     //Sigh.. as of 2016 because LibreOffice EMF+ has buggy support of transformations to fonts (e.g., shrinks instead of rotates!)
     if (m_UseEMFPlus  &&  m_UseEMFPlusFont) {
         if (rot != 0) {
@@ -695,6 +695,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
             trans.Write(m_File);
         }
     } else {
+        /* Commented out because Using rotation built into EMF font support; not as elegant but better supported by viewing/editing programs.
         if (rot != 0) {
             EMF::S_SETWORLDTRANSFORM emr;
             emr.xform.Set(cos(rot*M_PI/180), -sin(rot*M_PI/180),
@@ -703,23 +704,27 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
             emr.Write(m_File);
             x = 0; y = 0; //because already translated!
         }
+        */
 
         if (m_CurrTextCol != gc->col) {
             EMF::S_SETTEXTCOLOR emr;
             emr.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
             if (R_ALPHA(gc->col) > 0  &&  R_ALPHA(gc->col) < 255) {
-                Rf_warning("Unfortunately, partial transparency for fonts is not supported by EMF, and Libreoffice EMF+ support for fonts is incomplete; thus for now, devEMF does not enable transparent fonts.");
+                Rf_warning("partial transparency is not supported for EMF "
+                           "fonts (consider enabling EMF+, although be aware "
+                           "LibreOffice EMF+ font support is incomplete)");
             }
             emr.Write(m_File);
             m_CurrTextCol = gc->col;
         }
         EMF::S_EXTTEXTOUTW emr;
         emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
-        emr.graphicsMode = EMF::eGM_ADVANCED;
-        emr.exScale = 0; //not used with GM_ADVANCED
-        emr.eyScale = 0; //not used with GM_ADVANCED
+        emr.graphicsMode = EMF::eGM_COMPATIBLE;
+        emr.exScale = 1;
+        emr.eyScale = 1;
         double textWidth =  info ? info->GetStrWidth(str) : 0;
-        emr.emrtext.reference.Set(x-floor(textWidth*hadj + 0.5), y);//manually shift reference point for LibreOffice + tranformation compatibility
+        emr.emrtext.reference.Set(x-cos(rot*M_PI/180)*floor(textWidth*hadj+0.5),
+                                  y+sin(rot*M_PI/180)*floor(textWidth*hadj+0.5));//manually shift reference point for maximum compatibility
         emr.emrtext.offString = 0; // fill in when serializing
         emr.emrtext.options = 0; // from spec, seems should be eETO_NO_RECT, but office does seem to support this
         emr.emrtext.rect.Set(0,0,0,0);
@@ -727,12 +732,13 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         emr.emrtext.str = iConvUTF8toUTF16LE(str);
         emr.emrtext.nChars = emr.emrtext.str.length()/2;
         emr.Write(m_File);
-
+        /* Commented out for same reason as above
         if (rot != 0) {
             EMF::S_SETWORLDTRANSFORM emr;
             emr.xform.Set(1,0,0,1, 0,0);
             emr.Write(m_File);
         }
+        */
     }
 }
 

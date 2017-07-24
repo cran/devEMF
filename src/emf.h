@@ -1,4 +1,4 @@
-/* $Id: emf.h 341 2017-06-09 18:54:26Z pjohnson $
+/* $Id: emf.h 344 2017-07-24 15:17:27Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -74,6 +74,7 @@ namespace EMF {
         eEMR_COMMENT = 70,
         eEMR_EXTSELECTCLIPRGN = 0x4B,
         eEMR_INTERSECTCLIPRECT = 0x1E,
+        eEMR_BITBLT = 76,
         eEMR_STRETCHBLT = 77,
         eEMR_STRETCHDIBITS = 81,
         eEMR_EXTCREATEFONTINDIRECTW = 82,
@@ -528,11 +529,12 @@ namespace EMF {
         SSysFontInfo *m_SysFontInfo;
         SLogFont lf;
         
-	SFont(unsigned char face, int size, const std::string &familyUTF16) :
+        SFont(unsigned char face, int size, const std::string &familyUTF16,
+              double rot) :
             SObject(eEMR_EXTCREATEFONTINDIRECTW), m_SysFontInfo(NULL) {
             lf.height = -size;//(-) matches against *character* height
             lf.width = 0;
-            lf.escapement = 0;
+            lf.escapement = (int)(rot*10);
             lf.orientation = 0;
             lf.weight = (face == 2  ||  face == 4) ?
                 eFontWeight_bold : eFontWeight_normal;
@@ -738,7 +740,7 @@ namespace EMF {
         }
     };
 
-    struct S_STRETCHDIBITS : SRecord {
+    struct S_BITBLT : SRecord {
         struct SBitmapHeader {
             TUInt4 size;
             TInt4 width, height;
@@ -753,31 +755,31 @@ namespace EMF {
         };
         SRect bounds;
         TInt4 xDest, yDest;
+        TInt4 cxDest,cyDest;
+        TUInt4 bitBltRasterOp;
         TInt4 xSrc, ySrc;
-        TInt4 cxSrc, cySrc;
+        SXForm xformSrc;
+        SColorRef bkColorSrc;
+        TUInt4 usageSrc;
         int offBmiSrc, cbBmiSrc;
         int offBitsSrc, cbBitsSrc;
-        TUInt4 usageSrc;
-        TUInt4 bitBltRasterOp;
-        TInt4 cxDest,cyDest;
         SBitmapHeader bmpHead;
         std::string bmpData;
-        S_STRETCHDIBITS(unsigned int *data,
-                        unsigned int srcW, unsigned int srcH,
-                        double x, double y, double w, double h) :
-            SRecord(eEMR_STRETCHDIBITS) {
+        S_BITBLT(unsigned int *data, unsigned int srcW, unsigned int srcH,
+                 double x, double y, double w, double h) :
+            SRecord(eEMR_BITBLT) {
             bounds.Set(x,x+w,y,y+h);
             xDest = x;
             yDest = y;
             xSrc = ySrc = 0;
-            cxSrc = srcW;
-            cySrc = srcH;
-            offBmiSrc = 20*4;//offset(S_STRETCHDIBITS,bmp)
+            offBmiSrc = 25*4;//offset(S_BITBLT,bmp)
             cbBmiSrc = 10*4; //size of bitmap header
             offBitsSrc = offBmiSrc + cbBmiSrc;
             cbBitsSrc = srcW*srcH*4;//size of bitmap
             usageSrc = 0; // DIB_RGB_COLORS
             bitBltRasterOp = 0xCC0020; //SRCCOPY
+            xformSrc.Set(1,0,0,1,0,0); // identity
+            bkColorSrc.Set(0,0,0); //src bg color (irrelevant for us)
             cxDest = w;
             cyDest = h;
             bmpHead.size = cbBmiSrc;
@@ -801,9 +803,9 @@ namespace EMF {
         }
 	std::string& Serialize(std::string &o) const {
             SRecord::Serialize(o) << bounds << xDest << yDest <<
-                xSrc << ySrc << cxSrc << cySrc << TUInt4(offBmiSrc) <<
+                cxDest << cyDest << bitBltRasterOp << xSrc << ySrc <<
+                xformSrc << bkColorSrc << usageSrc << TUInt4(offBmiSrc) <<
                 TUInt4(cbBmiSrc) << TUInt4(offBitsSrc) << TUInt4(cbBitsSrc) <<
-                usageSrc << bitBltRasterOp << cxDest << cyDest <<
                 bmpHead.size << bmpHead.width << bmpHead.height <<
                 bmpHead.planes << bmpHead.bitCount << bmpHead.compression <<
                 bmpHead.imageSize << bmpHead.xPelsPerMeter <<
@@ -965,9 +967,10 @@ namespace EMF {
         unsigned char GetFont(unsigned char face, int size,
                               const std::string &familyUTF8,
                               const std::string &familyUTF16,
+                              double rot,
                               bool selectFont,
                               EMF::ofstream &out, SSysFontInfo **fontInf) {
-            SFont *font = new SFont(face, size, familyUTF16);
+            SFont *font = new SFont(face, size, familyUTF16, rot);
             SObject *obj = selectFont ?
                 x_SelectObject(font, out) :
                 x_GetObject(font, out);

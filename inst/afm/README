@@ -2,4 +2,4 @@ The 14 "core" AFM files were downloaded from Adobe (see "MustRead.html"), which 
    https://github.com/adobe-type-tools/agl-aglfn
 on 17 March 2016.
 
-One exception: this mapping file encodes the gylph named "Omega" as U+2126, which is a deprecated unicode character for the Ohm symbol.  A better mapping for our purposes is U+03A9, which is unicode refers to as the upper case greek letter.This chracter mapping was edited by hand.
+One exception: this mapping file encodes the gylph named "Omega" as U+2126, which is a deprecated unicode character for the Ohm symbol.  A better mapping for our purposes is U+03A9, which unicode refers to as the upper case greek letter.This chracter mapping was edited by hand.
