@@ -467,11 +467,14 @@ struct SSysFontInfo {
         UniChar ch = c;
         CTFontGetGlyphsForCharacters (m_FontInfo, &ch, &glyph, 1);
         CGRect extents;
-        extents = CTFontGetBoundingRectsForGlyphs(m_FontInfo, 0, &glyph,
-                                                  NULL, 1);
+        extents = CTFontGetBoundingRectsForGlyphs(m_FontInfo,
+                                                  kCTFontOrientationDefault,
+                                                  &glyph, NULL, 1);
         ascent = extents.origin.y+extents.size.height;
         descent = (extents.origin.y > 0) ? 0 : -extents.origin.y;
-        width = CTFontGetAdvancesForGlyphs(m_FontInfo, 0, &glyph, NULL, 1);
+        width = CTFontGetAdvancesForGlyphs(m_FontInfo,
+                                           kCTFontOrientationDefault,
+                                           &glyph, NULL, 1);
     }
     double GetStrWidth(const char *str) const {
         CFStringRef cfStr =
@@ -483,8 +486,9 @@ struct SSysFontInfo {
         }
         CGGlyph* glyphs = new CGGlyph[len];
         CTFontGetGlyphsForCharacters (m_FontInfo, ch, glyphs, len);
-        double w = CTFontGetAdvancesForGlyphs(m_FontInfo, 0, glyphs, NULL,
-                                              len);
+        double w = CTFontGetAdvancesForGlyphs(m_FontInfo,
+                                              kCTFontOrientationDefault,
+                                              glyphs, NULL, len);
         delete[] glyphs;
         delete[] ch;
         CFRelease(cfStr);

@@ -1,3 +1,7 @@
+v3.6-1 -- 22 May 2018
+  -emphasize inability to embed fonts in help page
+  -attempt to fix compiler error on certain newer OSX systems
+
 v3.6 -- 21 July 2017
   -for rotated text in EMF (as opposed to EMF+), insert rotation into
    font specification rather than using world transform.  This change
