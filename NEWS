@@ -1,3 +1,7 @@
+v3.6-2 -- 2 Jan 2019
+  -Bug fix: white text color not being set until a non-white text
+   color was used first (bug only in EMF).
+
 v3.6-1 -- 22 May 2018
   -emphasize inability to embed fonts in help page
   -attempt to fix compiler error on certain newer OSX systems

@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 344 2017-07-24 15:17:27Z pjohnson $
+/* $Id: devEMF.cpp 346 2019-01-02 19:37:25Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -57,7 +57,7 @@ public:
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
         m_NumRecords = 0;
-        m_CurrHadj = m_CurrTextCol = m_CurrPolyFill = -1;
+        m_CurrHadj = m_CurrPolyFill = -1;
         m_CurrClip[0] = m_CurrClip[1] = m_CurrClip[2] = m_CurrClip[3] = -1;
         m_CoordDPI = coordDPI;
         //feature options
@@ -150,6 +150,18 @@ private:
                                      rot,
                                      selectFont, m_File, info);
     }
+    void x_SetEMFTextColor(int col) {
+        EMF::S_SETTEXTCOLOR emr;
+        emr.color.Set(R_RED(col), R_GREEN(col), R_BLUE(col));
+        if (R_ALPHA(col) > 0  &&  R_ALPHA(col) < 255) {
+            Rf_warning("partial transparency is not supported for EMF "
+                       "fonts (consider enabling EMF+, although be aware "
+                       "LibreOffice EMF+ font support is incomplete)");
+        }
+        emr.Write(m_File);
+        m_CurrTextCol = col;
+    }
+
 
 private:
     bool m_debug;
@@ -395,7 +407,10 @@ bool CDevEMF::Open(const char* filename, int width, int height)
             emr.mode = EMF::eTRANSPARENT;
             emr.Write(m_File);
         }
-     
+
+        //Initialize text color
+        x_SetEMFTextColor(R_RGBA(0,0,0,255));
+        
         {//Fixed text alignment point
             EMF::S_SETTEXTALIGN emr;
             emr.mode = EMF::eTA_BASELINE|EMF::eTA_LEFT;
@@ -707,15 +722,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         */
 
         if (m_CurrTextCol != gc->col) {
-            EMF::S_SETTEXTCOLOR emr;
-            emr.color.Set(R_RED(gc->col), R_GREEN(gc->col), R_BLUE(gc->col));
-            if (R_ALPHA(gc->col) > 0  &&  R_ALPHA(gc->col) < 255) {
-                Rf_warning("partial transparency is not supported for EMF "
-                           "fonts (consider enabling EMF+, although be aware "
-                           "LibreOffice EMF+ font support is incomplete)");
-            }
-            emr.Write(m_File);
-            m_CurrTextCol = gc->col;
+            x_SetEMFTextColor(gc->col);
         }
         EMF::S_EXTTEXTOUTW emr;
         emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
