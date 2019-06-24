@@ -19,6 +19,9 @@ emf <- function(file = "Rplot.emf", width=7, height=7,
                 custom.lty=emfPlus, emfPlus=TRUE,
                 emfPlusFont = FALSE, emfPlusRaster = FALSE)
 {
+    if (is.na(width) ||  width < 0 ||  is.na(height)  ||  height < 0) {
+        stop("emf: both width and height must be positive numbers.");
+    }
   .External(devEMF, file, bg, fg, width, height, pointsize,
             family, coordDPI, custom.lty, emfPlus, emfPlusFont, emfPlusRaster)
   invisible()

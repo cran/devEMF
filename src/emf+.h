@@ -622,20 +622,20 @@ namespace EMFPLUS {
         SColorRef m_Brush;
         unsigned char m_StringFormatId;
         SRectF m_LayoutRect;
-        std::string m_String;
+        std::string m_StringUTF16LE;
         SDrawString(const std::string &s,
                     unsigned int col, unsigned char fontId,
                     unsigned char stringFormatId) :
             SRecord(eRcdDrawString), m_Brush(col) {
             iFlags = 1 << 15 | fontId; //bit indicates color specified here
             m_StringFormatId = stringFormatId;
-            m_String = s;
+            m_StringUTF16LE = s;
         }
         std::string& Serialize(std::string &o) const {
             SRecord::Serialize(o) << m_Brush << TUInt4(m_StringFormatId)
-                                  << TUInt4(m_String.length()/2)
+                                  << TUInt4(m_StringUTF16LE.length()/2)
                                   << m_LayoutRect;
-            o.append(m_String);
+            o.append(m_StringUTF16LE);
             return o;
 	}
     };

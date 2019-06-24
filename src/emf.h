@@ -1,4 +1,4 @@
-/* $Id: emf.h 344 2017-07-24 15:17:27Z pjohnson $
+/* $Id: emf.h 349 2019-06-24 17:55:13Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -556,6 +556,10 @@ namespace EMF {
               << lf.charSet << lf.outPrecision << lf.clipPrecision
               << lf.quality << lf.pitchAndFamily;
             o.append(lf.faceName, 64);
+            //a Microsoft security update issued on 11 June 2019 no longer supports viewing EMF files with a LogFont object here (even though this is still allowed by the EMF design spec); below fills out the more complicated LogFontExDv which still works for viewing on Windows.
+            o.append(128+64+64, '\0');//pad out to fill LogFontEx object
+            o << TUInt4(0x08007664) // DesignVector signature
+              << TUInt4(0);//specify no elements in design vector
             return o;
 	}
     };

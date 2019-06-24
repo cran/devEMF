@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 346 2019-01-02 19:37:25Z pjohnson $
+/* $Id: devEMF.cpp 349 2019-06-24 17:55:13Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -105,8 +105,8 @@ private:
             return "";
         }
         size_t inLeft = s.length();
-        size_t outLeft = s.length()*2;
-        char *utf16 = new char[outLeft];//overestimate
+        size_t outLeft = s.length()*4;//overestimate
+        char *utf16 = new char[outLeft];
         const char *in = s.c_str();
         char *out = utf16;
         size_t res = Riconv(cd, &in, &inLeft, &out, &outLeft);
@@ -115,7 +115,7 @@ private:
             Rf_error("Text string not valid UTF-8.");
             return "";
         }
-        string ret(utf16, s.length()*2 - outLeft);
+        string ret(utf16, s.length()*4 - outLeft);
         delete[] utf16;
         Riconv_close(cd);
         return ret;
@@ -737,7 +737,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         emr.emrtext.rect.Set(0,0,0,0);
         emr.emrtext.offDx = 0; //0 when not included (spec ambiguous but see https://social.msdn.microsoft.com/Forums/en-US/29e46348-c2eb-44d5-8d1a-47c1ecdc68ff/msemf-emrtextdxbuffer-is-optional-how-to-specify-its-not-specified?forum=os_windowsprotocols)
         emr.emrtext.str = iConvUTF8toUTF16LE(str);
-        emr.emrtext.nChars = emr.emrtext.str.length()/2;
+        emr.emrtext.nChars = emr.emrtext.str.length()/2;//spec says number of characters, but both Word & LibreOffice implement #bytes/2 (i.e., they don't collapse unicode supplemental planes that require multiple surrogates)
         emr.Write(m_File);
         /* Commented out for same reason as above
         if (rot != 0) {

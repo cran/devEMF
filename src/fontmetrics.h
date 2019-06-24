@@ -222,7 +222,7 @@ struct SSysFontInfo {
     }
 #endif
 
-    bool HasChar(short unsigned int c) const {
+    bool HasChar(unsigned int c) const {
 #ifdef HAVE_XFT
         if (m_FontInfo) {
             return XftCharExists(s_XDisplay, m_FontInfo, c);
@@ -232,12 +232,12 @@ struct SSysFontInfo {
         return m_AFMCharMetrics.find(c) != m_AFMCharMetrics.end();
 #endif
     }
-    void GetMetrics(short unsigned int c, 
+    void GetMetrics(unsigned int c, 
                     double &ascent, double &descent, double &width) const {
 #ifdef HAVE_XFT
         if (m_FontInfo) {
             XGlyphInfo extents;
-            XftTextExtents16(s_XDisplay, m_FontInfo, &c, 1, &extents);
+            XftTextExtents32(s_XDisplay, m_FontInfo, &c, 1, &extents);
             // See below URL for interpreting XFT extents
             // http://ns.keithp.com/pipermail/fontconfig/2003-June/000492.html
             ascent = extents.y;
@@ -369,13 +369,13 @@ struct SSysFontInfo {
         DeleteObject(m_FontHandle);
         ReleaseDC(0, m_DC);
     }
-    bool HasChar(short unsigned int c) const {
+    bool HasChar(unsigned int c) const {
         GLYPHMETRICS metrics;
         const MAT2 matrix = {{0,1}, {0,0}, {0,0}, {0,1}};
         return (GetGlyphOutlineW(m_DC, c, GGO_METRICS, &metrics,
                                  0, NULL, &matrix) != GDI_ERROR);
     }
-    void GetMetrics(short unsigned int c, 
+    void GetMetrics(unsigned int c, 
                     double &ascent, double &descent, double &width) const {
         GLYPHMETRICS metrics;
         const MAT2 matrix = {{0,1}, {0,0}, {0,0}, {0,1}};
@@ -456,12 +456,12 @@ struct SSysFontInfo {
         CFRelease(vFam);
     }
     ~SSysFontInfo() {CFRelease(m_FontInfo);}
-    bool HasChar(short unsigned int c) const {
+    bool HasChar(unsigned int c) const {
         CGGlyph glyph;
         UniChar ch = c;
         return CTFontGetGlyphsForCharacters (m_FontInfo, &ch, &glyph, 1);
     }
-    void GetMetrics(short unsigned int c, 
+    void GetMetrics(unsigned int c, 
                     double &ascent, double &descent, double &width) const {
         CGGlyph glyph;
         UniChar ch = c;

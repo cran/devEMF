@@ -1,3 +1,13 @@
+v3.6-3 -- 20 June 2019
+  -Workaround for recent Microsoft security patch that breaks the EMF
+   specification and does not allow viewing of EMF files containing
+   certain Font-related records in Microsoft Office.  Files using only
+   EMF+ fonts are not affected.  The relevant CVE seems likely to be
+   https://www.zerodayinitiative.com/advisories/ZDI-19-557/
+  -Error check: return error if user requests negative or NA width/height
+  -Bug fix: handle text & font metrics for Unicode characters consuming more
+   than 2 bytes
+
 v3.6-2 -- 2 Jan 2019
   -Bug fix: white text color not being set until a non-white text
    color was used first (bug only in EMF).
