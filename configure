@@ -1903,7 +1903,6 @@ fi
 RBIN="${R_HOME}/bin/R"
 CXX=`"${RBIN}" CMD config CXX`;
 CXXFLAGS=`"${RBIN}" CMD config CXXFLAGS`
-CPP=`"${RBIN}" CMD config CPP`;
 
 
 ac_ext=cpp

@@ -56,6 +56,7 @@ namespace EMFPLUS {
         eRcdSetTextRenderingHint = 0x401F,
         eRcdSetInterpolationMode = 0x4021,
         eRcdSetPixelOffsetMode = 0x4022,
+        eRcdSetCompositingQuality = 0x4024,
         eRcdSetWorldTransform = 0x402A,
         eRcdResetWorldTransform = 0x402B,
         eRcdMultiplyWorldTransform = 0x402C,
@@ -144,7 +145,13 @@ namespace EMFPLUS {
         ePixelOffsetModeNone = 3,
         ePixelOffsetModeHalf = 4
     };
-
+    
+    enum ECompositingQuality {
+        eCompositingQualityDefault = 1,
+        eCompositingQualityHighSpeed = 2,
+        eCompositingQualityHighQuality = 3
+    };
+    
     enum ECombineMode {
         eCombineModeReplace = 0,
         eCombineModeIntersect = 1,
@@ -285,6 +292,16 @@ namespace EMFPLUS {
     struct SSetInterpolationMode : SRecord {
         SSetInterpolationMode(EInterpolationMode m) :
         SRecord(eRcdSetInterpolationMode) {
+            iFlags = m;
+        }
+        std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o);
+        }
+    };
+
+    struct SSetCompositingQuality : SRecord {
+        SSetCompositingQuality(ECompositingQuality m) :
+        SRecord(eRcdSetCompositingQuality) {
             iFlags = m;
         }
         std::string& Serialize(std::string &o) const {

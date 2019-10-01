@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 349 2019-06-24 17:55:13Z pjohnson $
+/* $Id: devEMF.cpp 356 2019-10-01 16:55:42Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -57,7 +57,7 @@ public:
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
         m_NumRecords = 0;
-        m_CurrHadj = m_CurrPolyFill = -1;
+        m_CurrHadj = m_CurrPolyFill = -100;
         m_CurrClip[0] = m_CurrClip[1] = m_CurrClip[2] = m_CurrClip[3] = -1;
         m_CoordDPI = coordDPI;
         //feature options
@@ -393,6 +393,12 @@ bool CDevEMF::Open(const char* filename, int width, int height)
             EMFPLUS::SSetTextRenderingHint emr(EMFPLUS::eTRHAntiAliasGridFit);
             emr.Write(m_File);
         }
+        {// ask for precise coordinates (reduces thin gaps between
+         // nominally adjacent drawn objects as well as other unwanted
+         // behavior when drawing raster images)
+            EMFPLUS::SSetPixelOffsetMode emr(EMFPLUS::ePixelOffsetModeHalf);
+            emr.Write(m_File);
+        }
     }
 
     if (!m_UseEMFPlus  ||  !m_UseEMFPlusFont  ||  !m_UseEMFPlusRaster) {
@@ -410,12 +416,6 @@ bool CDevEMF::Open(const char* filename, int width, int height)
 
         //Initialize text color
         x_SetEMFTextColor(R_RGBA(0,0,0,255));
-        
-        {//Fixed text alignment point
-            EMF::S_SETTEXTALIGN emr;
-            emr.mode = EMF::eTA_BASELINE|EMF::eTA_LEFT;
-            emr.Write(m_File);
-        }
     }
     return TRUE;
 }
@@ -516,8 +516,6 @@ void CDevEMF::Raster(unsigned int* r, int w, int h, double x, double y,
              EMFPLUS::eInterpolationModeHighQualityBilinear:
              EMFPLUS::eInterpolationModeNearestNeighbor);
         m1.Write(m_File);
-        EMFPLUS::SSetPixelOffsetMode m2(EMFPLUS::ePixelOffsetModeHalf);
-        m2.Write(m_File);
         EMFPLUS::SDrawImage image(m_ObjectTable.GetImage(r,w,h,m_File), w,h,
                                   x, y, width, height);
         image.Write(m_File);
@@ -630,7 +628,7 @@ void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
             EMFPLUS::SFillPath fill(pathId, gc->fill);
             fill.Write(m_File);
         }
-        {
+        if (!R_TRANSPARENT(gc->col)) {
             EMFPLUS::SDrawPath drawPath(pathId, x_GetPen(gc));
             drawPath.Write(m_File);
         }
@@ -696,11 +694,17 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         }
         EMFPLUS::SDrawString text
             (iConvUTF8toUTF16LE(str), gc->col, fontId,
-             m_ObjectTable.GetStringFormat(EMFPLUS::eStrAlignNear,
+             m_ObjectTable.GetStringFormat(hadj < 0.5 ? EMFPLUS::eStrAlignNear:
+                                           (hadj==0.5 ? EMFPLUS::eStrAlignCenter:
+                                            EMFPLUS::eStrAlignFar),
                                            EMFPLUS::eStrAlignNear, m_File));
-        double width = info->GetStrWidth(str);
-        text.m_LayoutRect.x = x - width*hadj;
-        double ascent, descent;
+        if (hadj == 0  ||  hadj == 0.5  ||  hadj == 1) {
+            //already taken care of by request to align near/far
+            text.m_LayoutRect.x = x;
+        } else {
+            text.m_LayoutRect.x = x + (hadj<0.5 ? -hadj : 1-hadj)*info->GetStrWidth(str);
+        }
+        double width, ascent, descent;
         info->GetFontBBox(ascent, descent, width);
         if (m_debug) Rprintf("fbbox: %.1f %.1f %.1f\n", ascent, descent, width);
         text.m_LayoutRect.y = y - ascent;//find baseline
@@ -724,14 +728,34 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
         if (m_CurrTextCol != gc->col) {
             x_SetEMFTextColor(gc->col);
         }
+        if (m_CurrHadj != hadj) {
+            EMF::S_SETTEXTALIGN emr;
+            emr.mode = (hadj < 0.5) ?
+                EMF::eTA_BASELINE|EMF::eTA_LEFT :
+                (hadj == 0.5 ? EMF::eTA_BASELINE|EMF::eTA_CENTER :
+                 EMF::eTA_BASELINE|EMF::eTA_RIGHT);
+            emr.Write(m_File);
+            m_CurrHadj = hadj;
+        }
+
         EMF::S_EXTTEXTOUTW emr;
         emr.bounds.Set(0,0,0,0);//EMF spec says to ignore
         emr.graphicsMode = EMF::eGM_COMPATIBLE;
         emr.exScale = 1;
         emr.eyScale = 1;
-        double textWidth =  info ? info->GetStrWidth(str) : 0;
-        emr.emrtext.reference.Set(x-cos(rot*M_PI/180)*floor(textWidth*hadj+0.5),
-                                  y+sin(rot*M_PI/180)*floor(textWidth*hadj+0.5));//manually shift reference point for maximum compatibility
+        if (hadj == 0  ||  hadj == 0.5  ||  hadj == 1) {
+            //already taken care of by request to align left/center/right
+            emr.emrtext.reference.Set(x,y);
+        } else {
+            double textWidth =  info ? info->GetStrWidth(str) : 0;
+            if (hadj < 0.5) {
+                emr.emrtext.reference.Set(x-floor(cos(rot*M_PI/180)*textWidth*hadj + 0.5),
+                                          y+floor(sin(rot*M_PI/180)*textWidth*hadj + 0.5));
+            } else {
+                emr.emrtext.reference.Set(x+floor(cos(rot*M_PI/180)*textWidth*(1-hadj) + 0.5),
+                                          y-floor(sin(rot*M_PI/180)*textWidth*(1-hadj) + 0.5));
+            }
+        }
         emr.emrtext.offString = 0; // fill in when serializing
         emr.emrtext.options = 0; // from spec, seems should be eETO_NO_RECT, but office does seem to support this
         emr.emrtext.rect.Set(0,0,0,0);

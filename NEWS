@@ -1,3 +1,18 @@
+v3.7 -- 30 Sept 2019
+  -For EMF+, request PixelOffsetModeHalf during file setup; this
+   allows certain nominally adjacent drawn objects to appear as
+   actually adjacent (without a thin gap between).
+  -No longer create EMF+ record for polygon/path outline if transparent.
+  -eliminate R CMD config CPP from configure.ac (deprecated and unnecessary)
+  -request closest EMF/EMF+ text alignment (left-aligned /
+   center-aligned / right-aligned); previously always requested
+   left-aligned.  Since R allows for arbitrary horizontal alignment
+   between [0,1], we still need to calculate text width and adjust the
+   reference point manually.  This change works around minor slop in
+   the calculation of the string width using font metrics (the degree
+   of slop depends on the viewing program and can become noticeable
+   with very long right-aligned strings).
+
 v3.6-3 -- 20 June 2019
   -Workaround for recent Microsoft security patch that breaks the EMF
    specification and does not allow viewing of EMF files containing

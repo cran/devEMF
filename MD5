@@ -1,10 +1,10 @@
-6c6ab3edf132e01d0c9f710a611411c9 *DESCRIPTION
+45ce6d03cfa10a41e932afeb3ceb9a2c *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-37c314e24960a293b33c856eca32e3a8 *NEWS
+45b12136f4e4c76efa1f8d8040c3f0d2 *NEWS
 8f0dbfdd8bfa6615cb3b06aa0da48c1c *R/emf.R
 c3cded853a2388ad53569a7105d1c1e3 *cleanup
-fdec67ed84e49c73bc62be0e130136d9 *configure
-0fbe1c6ee9dc92c76cb8d87a4d145142 *configure.ac
+9f073993349c4ce60b70b0763672ee95 *configure
+fbd68ea6c7672ed660fef41d285fda57 *configure.ac
 d41d8cd98f00b204e9800998ecf8427e *configure.win
 5a270f26831f5aec6b11cf364f2fb847 *inst/afm/Courier-Bold-ucs.afm.gz
 898a49661ffa8d90bf6cc6468a6b6e10 *inst/afm/Courier-BoldOblique-ucs.afm.gz
@@ -25,8 +25,8 @@ f57c9be7d2e5fc17a263cb40b05fd793 *inst/afm/Times-Roman-ucs.afm.gz
 692de51ec43f09fdd5bdb5b6d082aa4d *man/emf.Rd
 d62c4825a3abc101a04429d20703158d *src/Makevars.in
 b1c26a7aa76749fac4bd50d05b2184cd *src/Makevars.win
-ba8ca0a9c6fc1635b6c8c8580879ab3b *src/devEMF.cpp
-96ee4a64124543473c15f2d521d69611 *src/emf+.h
+f45943d21373258d536aa35591dea3cd *src/devEMF.cpp
+3f9a604cd5f9af2e3950bf2df28f34ba *src/emf+.h
 f7f54ceef59dc7dc75bc735d127e4a02 *src/emf.h
 e490c8b6f92a3c1d22f76fad5ab3dc01 *src/fontmetrics.h
 1134814f3af5c7efb4341ffa01a761e7 *tools/subunicode.pl

@@ -10,7 +10,6 @@ fi
 RBIN="${R_HOME}/bin/R"
 CXX=`"${RBIN}" CMD config CXX`;
 CXXFLAGS=`"${RBIN}" CMD config CXXFLAGS`
-CPP=`"${RBIN}" CMD config CPP`;
 AC_SUBST(R_HOME)
 
 AC_LANG(C++)
