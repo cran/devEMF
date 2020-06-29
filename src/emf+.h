@@ -161,6 +161,22 @@ namespace EMFPLUS {
         eCombineModeComplement = 5
     };
 
+    enum EBrushType {
+        eBrushTypeSolidColor = 0,
+        eBrushTypeHatchFill = 1,
+        eBrushTypeTextureFill = 2,
+        eBrushTypePathGradient = 3,
+        eBrushTypeLinearGradient = 4
+    };
+
+    enum EWrapMode {
+        eWrapModeTile = 0,
+        eWrapModeTileFlipX = 1,
+        eWrapModeTileFlipY = 2,
+        eWrapModeTileFlipXY = 3,
+        eWrapModeClamp = 4
+    };
+
     // ------------------------------------------------------------------------
     // EMF Objects used repeatedly
     const TUInt4 kVersion = 0xDBC01002; //specifies EMF+ and GDI+ version 1.1
@@ -189,8 +205,13 @@ namespace EMFPLUS {
                  unsigned char a) {
             red = r;  green = g;  blue = b; alpha = a;
         }
+        SColorRef(void) {}
         SColorRef(unsigned int c) {
             Set(R_RED(c), R_GREEN(c), R_BLUE(c), R_ALPHA(c));
+        }
+        SColorRef& operator= (unsigned int c) {
+            Set(R_RED(c), R_GREEN(c), R_BLUE(c), R_ALPHA(c));
+            return *this;
         }
         friend std::string& operator<< (std::string &o, const SColorRef &d) {
             return o << d.blue << d.green << d.red << d.alpha;
@@ -391,13 +412,48 @@ namespace EMFPLUS {
     };
 
     struct SBrush : SObject {
-        SColorRef brush;
-        SBrush(unsigned int c) : SObject(eTypeBrush), brush(c) {}
+        EBrushType brushType;
+        SColorRef color;
+        EWrapMode wrapMode;
+        SRectF gradCoords;
+        struct SBlend {
+            double pos;
+            SColorRef col;
+            friend bool operator< (const SBlend &b1, const SBlend &b2) {
+                return memcmp(&b1, &b2, sizeof(SBlend)) < 0;
+            }
+        };
+        std::vector<SBlend> blendVector;
+        SBrush(unsigned int c) : SObject(eTypeBrush),
+                                 brushType(eBrushTypeSolidColor),
+                                 color(c), wrapMode(eWrapModeTile) {}
+        SBrush(EBrushType bt) : SObject(eTypeBrush), brushType(bt) {}
         std::string& Serialize(std::string &o) const {
-            return SObject::Serialize(o) << kVersion
-                                         << TUInt4(0) //0 for solid brush
-                                         << brush;
-        }        
+            SObject::Serialize(o) << kVersion << TUInt4(brushType);
+            switch(brushType) {
+            case eBrushTypeSolidColor:
+                return o << color;
+            case eBrushTypeLinearGradient:
+                o << TUInt4(0x4)//preset colors flag
+                  << TUInt4(wrapMode) << gradCoords
+                  << color << color //start&end colors not used
+                  << TUInt4(0) << TUInt4(0) //reserved padding
+                  << TUInt4(blendVector.size());
+                for (unsigned int i = 0;  i < blendVector.size();  ++i) {
+                    o << TFloat4(blendVector[i].pos);
+                }
+                for (unsigned int i = 0;  i < blendVector.size();  ++i) {
+                    o << blendVector[i].col;
+                }
+                return o;
+            default:
+                throw std::logic_error("unhandled brush type");
+            }
+        }
+        friend bool operator< (const SBrush& b1, const SBrush& b2) {
+            int cmp = memcmp(&b1.brushType, &b2.brushType, (char*)(&b1.blendVector) - (char*)&b1.brushType);
+            return (cmp < 0 || (cmp == 0  &&  b1.blendVector < b2.blendVector));
+        }
     };
 
     struct SPenData {
@@ -511,7 +567,7 @@ namespace EMFPLUS {
                 m_Points[i].y = y[i];
             }
         }
-        ~SPath(void) { delete[] m_Points; }
+        ~SPath(void) { delete[] m_Points; delete[] m_NPointsPerPoly;}
         std::string& Serialize(std::string &o) const {
             SObject::Serialize(o);
             o << kVersion << TUInt4(m_TotalPts) << TUInt4(0);
@@ -624,14 +680,14 @@ namespace EMFPLUS {
     };
 
     struct SFillPath : SRecord {
-        SColorRef m_Brush;
+        TUInt4 m_BrushId;
         SFillPath(unsigned char pathId,
-                  unsigned int col) : SRecord(eRcdFillPath), m_Brush(col) {
-            iFlags = 1 << 15 | //specify solid brush, color given here
-                 pathId;
+                  unsigned char brushId) : SRecord(eRcdFillPath) {
+            iFlags = pathId;
+            m_BrushId = brushId;
         }
         std::string& Serialize(std::string &o) const {
-            return SRecord::Serialize(o) << m_Brush;
+            return SRecord::Serialize(o) << m_BrushId;
 	}
     };
 
@@ -759,9 +815,8 @@ namespace EMFPLUS {
             } else { //same type -- so compare details
                 switch (o1->type) {
                 case eTypeBrush:
-                    return memcmp(&dynamic_cast<const SBrush*>(o1)->brush,
-                                  &dynamic_cast<const SBrush*>(o2)->brush,
-                                  sizeof(SColorRef)) < 0;
+                    return *dynamic_cast<const SBrush*>(o1) <
+                        *dynamic_cast<const SBrush*>(o2);
                 case eTypePen: {
                     const SPen *p1 = dynamic_cast<const SPen*>(o1);
                     const SPen *p2 = dynamic_cast<const SPen*>(o2);
@@ -837,6 +892,9 @@ namespace EMFPLUS {
                                  useUserLty);
             return x_SelectObject(pen, out);
         }
+        unsigned char GetBrush(SBrush* brush, EMF::ofstream &out) {
+            return x_SelectObject(brush, out);
+        }
         unsigned char GetBrush(unsigned int col, EMF::ofstream &out) {
             SBrush *brush = new SBrush(col);
             return x_SelectObject(brush, out);
@@ -873,6 +931,7 @@ namespace EMFPLUS {
             return x_SelectObject(image, out);
         }
     private:
+        //note: takes ownership over pointer!
         unsigned char x_SelectObject(SObject *obj, EMF::ofstream &out) {
             TIndex::iterator i = m_Index.find(obj);
             if (i == m_Index.end()) {
@@ -880,6 +939,7 @@ namespace EMFPLUS {
                 SObject *old = m_Table[m_LastInserted];
                 if (old) {
                     m_Index.erase(old);
+                    delete old;
                 }
                 m_Table[m_LastInserted] = obj;
                 obj->SetObjId(m_LastInserted);

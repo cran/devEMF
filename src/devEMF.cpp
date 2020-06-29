@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 356 2019-10-01 16:55:42Z pjohnson $
+/* $Id: devEMF.cpp 359 2020-06-29 21:06:02Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -133,6 +133,57 @@ private:
                                     gc->ljoin, gc->lmitre, Inches2Dev(1)/72.,
                                     m_UseCustomLty, m_File);
     }
+    int x_GetBrush(const pGEcontext gc) {
+        bool hasFill = !R_TRANSPARENT(gc->fill);
+#if R_GE_version >= 13
+        hasFill = hasFill  ||  (gc->patternFill != R_NilValue);
+#endif
+        if (!m_UseEMFPlus  ||  !hasFill) {
+            return -1; //only implemented for EMF+
+        }
+        if (!R_TRANSPARENT(gc->fill)) {
+            return m_ObjectTable.GetBrush(new EMFPLUS::SBrush(gc->fill),m_File);
+        }
+#if R_GE_version >= 13
+        switch (R_GE_patternType(gc->patternFill)) {
+        case R_GE_linearGradientPattern: {
+            EMFPLUS::SBrush* b =
+                new EMFPLUS::SBrush(EMFPLUS::eBrushTypeLinearGradient);
+            b->gradCoords.x = R_GE_linearGradientX1(gc->patternFill);
+            b->gradCoords.y = R_GE_linearGradientY1(gc->patternFill);
+            x_TransformY(&b->gradCoords.y, 1);
+            b->gradCoords.w = R_GE_linearGradientX2(gc->patternFill) -
+                b->gradCoords.x;
+            double y2 = R_GE_linearGradientY2(gc->patternFill);
+            x_TransformY(&y2, 1);
+            b->gradCoords.h =  y2 - b->gradCoords.y;
+            switch (R_GE_linearGradientExtend(gc->patternFill)) {
+                //not sure if pad/none are correctly mapped..
+            case R_GE_patternExtendPad:
+                b->wrapMode = EMFPLUS::eWrapModeClamp; break;
+            case R_GE_patternExtendRepeat:
+                b->wrapMode = EMFPLUS::eWrapModeTile; break;
+            case R_GE_patternExtendReflect:
+                b->wrapMode = EMFPLUS::eWrapModeTileFlipXY; break;
+            case R_GE_patternExtendNone:
+                b->wrapMode = EMFPLUS::eWrapModeClamp; break;
+            }
+            int n = R_GE_linearGradientNumStops(gc->patternFill);
+            b->blendVector.resize(n);
+            for (int i = 0;  i < n;  ++i) {
+                b->blendVector[i].pos =
+                    R_GE_linearGradientStop(gc->patternFill, i);
+                b->blendVector[i].col =
+                    R_GE_linearGradientColour(gc->patternFill, i);
+            }
+            return m_ObjectTable.GetBrush(b, m_File);
+        }
+        default:
+            Rf_warning("brush pattern type unsupported by devEMF");
+        }
+#endif
+        return -1;
+    }
     unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
                             const char *fontfamily = NULL,
                             bool selectFont = false, double rot = 0) {
@@ -261,6 +312,17 @@ namespace EMFcb {
             *left = dd->left; *right = dd->right;
             *bottom = dd->bottom; *top = dd->top;
         }
+        SEXP setPattern(SEXP pattern, pDevDesc) {
+            return pattern;
+        }
+        void releasePattern(SEXP, pDevDesc) {} 
+
+        //unimplemented stubs (these additions to the R graphics
+        //engine appear primarily targeted at Cairo graphics
+        SEXP setClipPath(SEXP, SEXP, pDevDesc) { return R_NilValue; }
+        void releaseClipPath(SEXP, pDevDesc) {}
+        SEXP setMask(SEXP, SEXP, pDevDesc) {return R_NilValue;}
+        void releaseMask(SEXP, pDevDesc) {}
     }
 } //end of R callbacks / extern "C"
 
@@ -624,8 +686,9 @@ void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
     if (m_UseEMFPlus) {
         int pathId = m_ObjectTable.GetPath(1,x,y,&n, m_File);
-        if (!R_TRANSPARENT(gc->fill)) {
-            EMFPLUS::SFillPath fill(pathId, gc->fill);
+        int brushId = x_GetBrush(gc);
+        if (brushId >= 0) {//not transparent
+            EMFPLUS::SFillPath fill(pathId, brushId);
             fill.Write(m_File);
         }
         if (!R_TRANSPARENT(gc->col)) {
@@ -656,8 +719,9 @@ void CDevEMF::Path(double *x, double *y, int nPoly, int *nPts, bool winding,
         int pathId = m_ObjectTable.GetPath(nPoly, x, y, nPts, m_File);
         EMFPLUS::SDrawPath drawPath(pathId, x_GetPen(gc));
         drawPath.Write(m_File);
-        if (!R_TRANSPARENT(gc->fill)) {
-            EMFPLUS::SFillPath fill(pathId, gc->fill);
+        int brushId = x_GetBrush(gc);
+        if (brushId >= 0) {
+            EMFPLUS::SFillPath fill(pathId, brushId);
             fill.Write(m_File);
         }
     } else {
@@ -829,6 +893,14 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     dd->canHAdj = 1;
     dd->canChangeGamma = FALSE;
     dd->displayListOn = FALSE;
+#if R_GE_version >= 13
+    dd->setPattern      = EMFcb::setPattern;
+    dd->releasePattern  = EMFcb::releasePattern;
+    dd->setClipPath     = EMFcb::setClipPath;
+    dd->releaseClipPath = EMFcb::releaseClipPath;
+    dd->setMask         = EMFcb::setMask;
+    dd->releaseMask     = EMFcb::releaseMask;
+#endif
 
     /* Screen Dimensions in device coordinates */
     dd->left = 0;
@@ -852,6 +924,9 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
     /* Inches per device unit */
     dd->ipr[0] = dd->ipr[1] = 1./emf->Inches2Dev(1);
 
+#if R_GE_version >= 13
+    dd->deviceVersion = R_GE_definitions;
+#endif
 
     if (!emf->Open(filename, dd->right, dd->top)) 
 	return FALSE;
@@ -914,7 +989,7 @@ SEXP devEMF(SEXP args)
 }
 
     const R_ExternalMethodDef ExtEntries[] = {
-	{"devEMF", (DL_FUNC)&devEMF, 12},
+        {"devEMF", (DL_FUNC)&devEMF, 12},
 	{NULL, NULL, 0}
     };
     void R_init_devEMF(DllInfo *dll) {

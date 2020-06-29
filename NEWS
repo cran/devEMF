@@ -1,3 +1,10 @@
+v3.8 -- 29 June 2020
+  -accommodate R graphics engine version 13
+  -add support for linear gradient fills (feature of GE13) for EMF+;
+   other new features from GE13 do not appear possible to implement
+   with EMF/EMF+
+  -fix couple minor memory leaks
+
 v3.7 -- 30 Sept 2019
   -For EMF+, request PixelOffsetModeHalf during file setup; this
    allows certain nominally adjacent drawn objects to appear as
