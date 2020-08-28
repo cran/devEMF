@@ -13,7 +13,8 @@
 emf(file = "Rplot.emf", width = 7, height = 7,
     bg = "transparent", fg = "black", pointsize = 12,
     family = "Helvetica", coordDPI = 300, custom.lty=emfPlus,
-    emfPlus=TRUE, emfPlusFont = FALSE, emfPlusRaster = FALSE)
+    emfPlus=TRUE, emfPlusFont = FALSE, emfPlusRaster = FALSE,
+    emfPlusFontToPath = FALSE)
 }
 
 \arguments{
@@ -37,6 +38,8 @@ emf(file = "Rplot.emf", width = 7, height = 7,
     records?}
   \item{emfPlusRaster}{logical: if using EMF+, should raster images use
     EMF+ or EMF records?}
+  \item{emfPlusFontToPath}{logical: if using EMF+, should text be
+    converted to graphics paths and saved in file?}
 }
 \details{
   The standard office suites support very few vector graphics formats
@@ -49,23 +52,29 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   create multiple pages will result in a warning message and the output
   file will contain the different pages superimposed.
   
-  Also, EMF/EMF+ do not allow for embedding fonts.  Thus you must be
-  careful that your desired font is present both on the system that you
-  use when you create the emf file (i.e., when you run R) and on the
-  system that you use to import/view the resulting file.  Sticking to
-  the standard Adobe PostScript font families is probably a good idea.
+  Also, note EMF/EMF does not support font embedding, so with the
+  default options, any fonts used must be present both on the system
+  that you use when you create the graphics file (i.e., when you run R)
+  and on the system that you use to import/view the file.  HOWEVER, the
+  \code{emfPlusFontToPath = TRUE} option converts text characters into
+  graphics paths and makes the resulting EMF+ files truly portable
+  (although text strings will no longer be editable by downstream
+  programs).  This option is currently only implemented for Linux (with
+  FreeType installed) and Windows.  Contact the author if you need Apple
+  support.
 
-  EMF/EMF+ supports Unicode characters, and this package tries to maintain
-  support as well.  However, font metric information is system dependent
-  and so support may be spotty in practice.  Basic font metrics for the
-  standard Adobe PostScript font families are built into this package.
+  EMF/EMF+ supports Unicode characters, and this package tries to
+  maintain that support as well.  However, font metric information is
+  system dependent and on linux depends on FreeType or XFT being
+  installed.  Regardless, basic font metrics for the standard Adobe
+  PostScript font families are built into this package.
 
   Only EMF+ allows partial transparency (i.e., the only useful type --
   0.0 < alpha < 1.0); attempting to use a transparent color when
   \code{emfPlus = FALSE} will result in a warning message and the output
   will be completely transparent (invisible).
 
-  LibreOffice support for EMF+ remains incomplete as of version 5, and,
+  LibreOffice support for EMF+ was incomplete as of version 5, and,
   cannot handle EMF+ records with rotated text or raster images (hence
   the options to turn off EMF+ and use EMF instead for these types of
   records).  devEMF defaults to EMF for these records to maintain

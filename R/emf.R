@@ -17,12 +17,17 @@ emf <- function(file = "Rplot.emf", width=7, height=7,
                 bg = "transparent", fg = "black", pointsize=12,
                 family = "Helvetica", coordDPI = 300,
                 custom.lty=emfPlus, emfPlus=TRUE,
-                emfPlusFont = FALSE, emfPlusRaster = FALSE)
+                emfPlusFont = FALSE, emfPlusRaster = FALSE,
+                emfPlusFontToPath = FALSE)
 {
     if (is.na(width) ||  width < 0 ||  is.na(height)  ||  height < 0) {
         stop("emf: both width and height must be positive numbers.");
     }
+    if (emfPlusFont  &&  emfPlusFontToPath) {
+        stop("emf: at most one of 'emfPlusFont' and 'emfPlusFontToPath' can be TRUE")
+    }
   .External(devEMF, file, bg, fg, width, height, pointsize,
-            family, coordDPI, custom.lty, emfPlus, emfPlusFont, emfPlusRaster)
+            family, coordDPI, custom.lty, emfPlus, emfPlusFont, emfPlusRaster,
+            emfPlusFontToPath)
   invisible()
 }

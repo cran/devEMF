@@ -1,3 +1,11 @@
+v4.0 -- 28 Aug 2020
+  -new option emfPlusFontToPath that converts characters to EMF+
+   graphics paths and thus makes graphics files portable (otherwise
+   fonts must be installed on both the creating system and the viewing
+   system).  This route is the closest the EMF/EMF+ spec gets to
+   embedding fonts.  This option is implemented for Linux (via
+   FreeType support) and Windows; OSX support is not yet implemented.
+
 v3.8 -- 29 June 2020
   -accommodate R graphics engine version 13
   -add support for linear gradient fills (feature of GE13) for EMF+;

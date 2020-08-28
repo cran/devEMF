@@ -1824,6 +1824,7 @@ $as_echo "$as_me: creating cache $cache_file" >&6;}
 fi
 
 as_fn_append ac_header_list " X11/Xft/Xft.h"
+as_fn_append ac_header_list " ft2build.h"
 as_fn_append ac_header_list " zlib.h"
 # Check that the precious variables saved in the cache have kept the same
 # value.
@@ -1980,6 +1981,28 @@ $as_echo "$as_me: XFT_CFLAGS=${XFT_CFLAGS}" >&6;}
 $as_echo "$as_me: XFT_LIBS=${XFT_LIBS}" >&6;}
 
 
+   if test "xx$FREETYPE_LIBS" == "xx"; then
+      if test "xx$PKGCONF" != "xx"; then
+         { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether pkg-config knows about freetype2" >&5
+$as_echo_n "checking whether pkg-config knows about freetype2... " >&6; }
+         if "${PKGCONF}" --exists freetype2; then
+            { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+$as_echo "yes" >&6; }
+            FREETYPE_CFLAGS=`"${PKGCONF}" --cflags freetype2`
+            FREETYPE_LIBS=`"${PKGCONF}" --libs freetype2`
+         else
+            { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
+$as_echo "no" >&6; }
+         fi
+      fi
+   fi
+
+   { $as_echo "$as_me:${as_lineno-$LINENO}: FREETYPE_CFLAGS=${FREETYPE_CFLAGS}" >&5
+$as_echo "$as_me: FREETYPE_CFLAGS=${FREETYPE_CFLAGS}" >&6;}
+   { $as_echo "$as_me:${as_lineno-$LINENO}: FREETYPE_LIBS=${FREETYPE_LIBS}" >&5
+$as_echo "$as_me: FREETYPE_LIBS=${FREETYPE_LIBS}" >&6;}
+
+
    if test "xx$Z_LIBS" == "xx"; then
       if test "xx$PKGCONF" != "xx"; then
          { $as_echo "$as_me:${as_lineno-$LINENO}: checking whether pkg-config knows about zlib" >&5
@@ -1997,8 +2020,8 @@ $as_echo "no" >&6; }
    fi
 
 
-   CPPFLAGS="${XFT_CFLAGS} ${ZLIB_CFLAGS}"
-   LIBS="${XFT_LIBS} ${ZLIB_LIBS}"
+   CPPFLAGS="${XFT_CFLAGS} ${FREETYPE_CFLAGS} ${ZLIB_CFLAGS}"
+   LIBS="${XFT_LIBS} ${FREETYPE_LIBS} ${ZLIB_LIBS}"
 
    ac_ext=cpp
 ac_cpp='$CXXCPP $CPPFLAGS'
@@ -2925,11 +2948,17 @@ done
 
 
 
+
+
+
    if (test "x$ac_cv_header_zlib_h" == xyes); then
       CPPFLAGS="${CPPFLAGS} -DHAVE_ZLIB"
    fi
    if (test "x$ac_cv_header_X11_Xft_Xft_h" == xyes); then
       CPPFLAGS="${CPPFLAGS} -DHAVE_XFT"
+   fi
+   if (test "x$ac_cv_header_ft2build_h" == xyes); then
+      CPPFLAGS="${CPPFLAGS} -DHAVE_FREETYPE"
    fi
 
    if test "x$ac_cv_header_zlib_h" == xno  &&  test "x$ac_cv_header_X11_Xft_Xft_h" == xno; then

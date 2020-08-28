@@ -40,11 +40,12 @@
 #include <fstream>
 #include <set>
 #include <sstream>
-//#include <iostream> //FIXME / DEBUG ONLY
+//#include <iostream> // DEBUG ONLY
+#include <map>
 
-#include "fontmetrics.h" //platform-specific font metric code
 #include "emf.h"  //defines EMF data structures
 #include "emf+.h" //defines EMF+ data structures
+#include "fontmetrics.h" //platform-specific font metric code
 
 using namespace std;
 
@@ -52,7 +53,7 @@ using namespace std;
 class CDevEMF {
 public:
     CDevEMF(const char *defaultFontFamily, int coordDPI, bool customLty,
-            bool emfPlus, bool emfpFont, bool emfpRaster) :
+            bool emfPlus, bool emfpFont, bool emfpRaster, bool emfpEmbed) :
         m_debug(false) {
         m_DefaultFontFamily = defaultFontFamily;
         m_PageNum = 0;
@@ -66,6 +67,7 @@ public:
         if (m_debug) Rprintf("using emfplus: %d\n", emfPlus);
         m_UseEMFPlusFont = emfpFont;
         m_UseEMFPlusRaster = emfpRaster;
+        m_UseEMFPlusTextToPath = emfpEmbed;
     }
 
     // Member-function R callbacks (see below class definition for
@@ -184,22 +186,46 @@ private:
 #endif
         return -1;
     }
-    unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo **info=NULL,
-                            const char *fontfamily = NULL,
-                            bool selectFont = false, double rot = 0) {
+
+    class CFontInfoIndex : public map<SSysFontInfo::SFontSpec, SSysFontInfo*> {
+    public:
+        ~CFontInfoIndex(void) {
+            for (iterator i = begin();  i != end();  ++i) {
+                delete i->second;
+            }
+        }
+    };
+    SSysFontInfo* x_GetFontInfo(const pGEcontext gc,
+                                const char *fontfamily = NULL) {
         int face = (gc->fontface < 1  || gc->fontface > 4) ? 1 : gc->fontface;
         const char *family = fontfamily ? fontfamily :
             gc->fontfamily[0] != '\0' ? gc->fontfamily :
             m_DefaultFontFamily.c_str();
-        //emf+ font support is incomplete in LibreOffice (rotations are buggy)
+        SSysFontInfo::SFontSpec spec(family, face,
+                                     Inches2Dev(x_EffPointsize(gc)/72));
+        CFontInfoIndex::iterator i = m_FontInfoIndex.find(spec);
+        if (i == m_FontInfoIndex.end()) {
+            SSysFontInfo* info = new SSysFontInfo(spec);
+            m_FontInfoIndex[spec] = info;
+            return info;
+        } else {
+            return i->second;
+        }
+    }
+    unsigned char x_GetFont(const pGEcontext gc, SSysFontInfo *info = NULL,
+                            double rot = 0) {
+        if (info == NULL) {
+            info = x_GetFontInfo(gc);
+        }
         return m_UseEMFPlus  &&  m_UseEMFPlusFont ?
-            m_ObjectTable.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
-                                  family, iConvUTF8toUTF16LE(family),
-                                  m_File, info) :
-            m_ObjectTableEMF.GetFont(face, Inches2Dev(x_EffPointsize(gc)/72),
-                                     family, iConvUTF8toUTF16LE(family),
-                                     rot,
-                                     selectFont, m_File, info);
+            m_ObjectTable.GetFont(info->m_Spec.m_Face,
+                                  info->m_Spec.m_Size,
+                                  iConvUTF8toUTF16LE(info->m_Spec.m_Family),
+                                  m_File) :
+            m_ObjectTableEMF.GetFont(info->m_Spec.m_Face,
+                                     info->m_Spec.m_Size,
+                                     iConvUTF8toUTF16LE(info->m_Spec.m_Family),
+                                     rot, m_File);
     }
     void x_SetEMFTextColor(int col) {
         EMF::S_SETTEXTCOLOR emr;
@@ -226,6 +252,7 @@ private:
     bool m_UseEMFPlus;
     bool m_UseEMFPlusFont;
     bool m_UseEMFPlusRaster;
+    bool m_UseEMFPlusTextToPath;
 
     //EMF states
     double m_CurrHadj;
@@ -236,6 +263,9 @@ private:
     //EMF/EMF+ objects
     EMFPLUS::CObjectTable m_ObjectTable;
     EMF::CObjectTable m_ObjectTableEMF;
+
+    //system info for font metrics
+    CFontInfoIndex m_FontInfoIndex;
 };
 
 // R callbacks below (declare extern "C")
@@ -330,18 +360,18 @@ namespace EMFcb {
 void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
                      double* descent, double* width)
 {
-    if (m_debug) Rprintf("metricinfo: %i %x (face %i)\n",c,abs(c),gc->fontface);
+    if (m_debug) Rprintf("metricinfo: %c %i %x (face %i)\n",c,c,abs(c),gc->fontface);
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
     if (c < 0) { c = -c; }
 
     SSysFontInfo *info;
-    x_GetFont(gc, &info);
+    info = x_GetFontInfo(gc);
     if (!(info  &&  info->HasChar(c))  &&  gc->fontface == 5) {
         // check for char existence in "Symbol" font
-        x_GetFont(gc, &info, "Symbol");
+        info = x_GetFontInfo(gc, "Symbol");
     } else if (!info) {
         //last ditch attempt
-        x_GetFont(gc, &info, "sans");
+        info = x_GetFontInfo(gc, "sans");
         if (info) {
             Rf_warning("Using 'sans' font metrics instead of requested '%s'",
                        gc->fontfamily);
@@ -361,9 +391,7 @@ void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
 double CDevEMF::StrWidth(const char *str, const pGEcontext gc) {
     if (m_debug) Rprintf("strwidth ('%s') --> ", str);
 
-    SSysFontInfo *info;
-    x_GetFont(gc, &info);
-
+    SSysFontInfo *info = x_GetFontInfo(gc);
     double width =  info ? info->GetStrWidth(str) : 0;
 
     if (m_debug) Rprintf("%f\n", width);
@@ -685,7 +713,7 @@ void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
 
     x_TransformY(y, n);//EMF has origin in upper left; R in lower left
     if (m_UseEMFPlus) {
-        int pathId = m_ObjectTable.GetPath(1,x,y,&n, m_File);
+        int pathId = m_ObjectTable.GetPath(new EMFPLUS::SPath(1,x,y,&n),m_File);
         int brushId = x_GetBrush(gc);
         if (brushId >= 0) {//not transparent
             EMFPLUS::SFillPath fill(pathId, brushId);
@@ -716,7 +744,8 @@ void CDevEMF::Path(double *x, double *y, int nPoly, int *nPts, bool winding,
 
     if (m_UseEMFPlus) {
         // I can't find a way to make use of "winding" in EMF+
-        int pathId = m_ObjectTable.GetPath(nPoly, x, y, nPts, m_File);
+        int pathId = m_ObjectTable.GetPath(new EMFPLUS::SPath(nPoly,x,y,nPts),
+                                           m_File);
         EMFPLUS::SDrawPath drawPath(pathId, x_GetPen(gc));
         drawPath.Write(m_File);
         int brushId = x_GetBrush(gc);
@@ -744,10 +773,53 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
     if (m_debug) Rprintf("textUTF8: %s, %x  at %.1f %.1f\n", str, gc->col, x, y);
     x_TransformY(&y, 1);//EMF has origin in upper left; R in lower left
 
-    SSysFontInfo *info;
-    unsigned char fontId = x_GetFont(gc, &info, NULL, true, rot);
-    //Sigh.. as of 2016 because LibreOffice EMF+ has buggy support of transformations to fonts (e.g., shrinks instead of rotates!)
-    if (m_UseEMFPlus  &&  m_UseEMFPlusFont) {
+    SSysFontInfo *info = x_GetFontInfo(gc);
+    if (m_UseEMFPlus  &&  m_UseEMFPlusTextToPath) { // pseudo-embed fonts
+        //rotate & translate
+        EMFPLUS::SMultiplyWorldTransform trans
+            (cos(rot*M_PI/180), -sin(rot*M_PI/180),
+             sin(rot*M_PI/180), cos(rot*M_PI/180),
+             x, y);
+        trans.Write(m_File);
+        EMFPLUS::STranslateWorldTransform startAlign
+            (-hadj*info->GetStrWidth(str), 0);
+        startAlign.Write(m_File);
+
+        //draw string -- have to convert UTF8 to UTF32
+        unsigned int length = strlen(str);
+        unsigned char len1, len2;
+        unsigned char arr[4];
+        unsigned long ch1, ch2;
+        len2 = SSysFontInfo::UTF8codepointBytes(str[0]);
+        memset(arr, 0, 4); memcpy(arr + 4-len2, str, len2);
+        arr[4-len2] &= 255 >> len2;
+        ch2 = (arr[0] & 63) << 18  |  (arr[1] & 63) << 12  |
+            (arr[2] & 63) << 6  |  (arr[3] & 127);
+        for (unsigned int i = 0;  i < length;  i += len1) {
+            len1 = len2; ch1 = ch2;
+            EMFPLUS::SPath *path = new EMFPLUS::SPath;
+            info->AppendGlyphPath(ch1, *path);
+            int pathId = m_ObjectTable.GetPath(path, m_File);
+            EMFPLUS::SFillPath fill(pathId, R_RED(gc->col), R_GREEN(gc->col),
+                                    R_BLUE(gc->col), R_ALPHA(gc->col));
+            fill.Write(m_File);
+            if (i + len1 < length) {
+                len2 = SSysFontInfo::UTF8codepointBytes(str[i+len1]);
+                memset(arr, 0, 4); memcpy(arr + 4-len2, str+i+len1, len2);
+                arr[4-len2] &= 255 >> len2;
+                ch2 = (arr[0] & 63) << 18  |  (arr[1] & 63) << 12  |
+                    (arr[2] & 63) << 6  |  (arr[3] & 127);
+                EMFPLUS::STranslateWorldTransform
+                    advance(info->GetAdvance(ch1, ch2), 0);
+                advance.Write(m_File);
+            }
+        }
+
+        //reset rotation
+        EMFPLUS::SResetWorldTransform reset;
+        reset.Write(m_File);
+        
+    } else if (m_UseEMFPlus  &&  m_UseEMFPlusFont) { //Use EMF+ fonts
         if (rot != 0) {
             EMFPLUS::SMultiplyWorldTransform trans
                 (cos(rot*M_PI/180), -sin(rot*M_PI/180),
@@ -757,7 +829,7 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
             x = 0; y = 0; //because already translated!
         }
         EMFPLUS::SDrawString text
-            (iConvUTF8toUTF16LE(str), gc->col, fontId,
+            (iConvUTF8toUTF16LE(str), gc->col, x_GetFont(gc, info),
              m_ObjectTable.GetStringFormat(hadj < 0.5 ? EMFPLUS::eStrAlignNear:
                                            (hadj==0.5 ? EMFPLUS::eStrAlignCenter:
                                             EMFPLUS::eStrAlignFar),
@@ -777,7 +849,8 @@ void CDevEMF::TextUTF8(double x, double y, const char *str, double rot,
             EMFPLUS::SResetWorldTransform trans;
             trans.Write(m_File);
         }
-    } else {
+    } else { //otherwise EMF fonts
+        x_GetFont(gc, info, rot);//inserts & selects font
         /* Commented out because Using rotation built into EMF font support; not as elegant but better supported by viewing/editing programs.
         if (rot != 0) {
             EMF::S_SETWORLDTRANSFORM emr;
@@ -843,12 +916,13 @@ Rboolean EMFDeviceDriver(pDevDesc dd, const char *filename,
                          const char *bg, const char *fg,
                          double width, double height, double pointsize,
                          const char *family, int coordDPI, bool customLty,
-                         bool emfPlus, bool emfpFont, bool emfpRaster)
+                         bool emfPlus, bool emfpFont, bool emfpRaster,
+                         bool emfpEmbed)
 {
     CDevEMF *emf;
 
     if (!(emf = new CDevEMF(family, coordDPI, customLty, emfPlus, emfpFont,
-                            emfpRaster))){
+                            emfpRaster, emfpEmbed))){
 	return FALSE;
     }
     dd->deviceSpecific = (void *) emf;
@@ -954,7 +1028,7 @@ SEXP devEMF(SEXP args)
     pGEDevDesc dd;
     const char *file, *bg, *fg, *family;
     double height, width, pointsize;
-    Rboolean userLty, emfPlus, emfpFont, emfpRaster;
+    Rboolean userLty, emfPlus, emfpFont, emfpRaster, emfpEmbed;
     int coordDPI;
 
     args = CDR(args); /* skip entry point name */
@@ -970,7 +1044,9 @@ SEXP devEMF(SEXP args)
     emfPlus = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
     emfpFont = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
     emfpRaster = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
+    emfpEmbed = (Rboolean) Rf_asLogical(CAR(args));     args = CDR(args);
 
+    R_GE_checkVersionOrDie(R_GE_version);
     R_CheckDeviceAvailable();
     BEGIN_SUSPEND_INTERRUPTS {
 	pDevDesc dev;
@@ -978,7 +1054,7 @@ SEXP devEMF(SEXP args)
 	    return 0;
 	if(!EMFDeviceDriver(dev, file, bg, fg, width, height, pointsize,
                             family, coordDPI, userLty, emfPlus, emfpFont,
-                            emfpRaster)) {
+                            emfpRaster, emfpEmbed)) {
 	    free(dev);
 	    Rf_error("unable to start %s() device", "emf");
 	}
@@ -989,7 +1065,7 @@ SEXP devEMF(SEXP args)
 }
 
     const R_ExternalMethodDef ExtEntries[] = {
-        {"devEMF", (DL_FUNC)&devEMF, 12},
+        {"devEMF", (DL_FUNC)&devEMF, 13},
 	{NULL, NULL, 0}
     };
     void R_init_devEMF(DllInfo *dll) {

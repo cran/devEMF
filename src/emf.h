@@ -526,12 +526,11 @@ namespace EMF {
         }
     };
     struct SFont : SObject {
-        SSysFontInfo *m_SysFontInfo;
         SLogFont lf;
         
         SFont(unsigned char face, int size, const std::string &familyUTF16,
               double rot) :
-            SObject(eEMR_EXTCREATEFONTINDIRECTW), m_SysFontInfo(NULL) {
+            SObject(eEMR_EXTCREATEFONTINDIRECTW) {
             lf.height = -size;//(-) matches against *character* height
             lf.width = 0;
             lf.escapement = (int)(rot*10);
@@ -548,7 +547,6 @@ namespace EMF {
             lf.pitchAndFamily = eFF_DONTCARE + eDEFAULT_PITCH;
             lf.SetFace(familyUTF16);
         }
-        ~SFont(void) { delete m_SysFontInfo; }
         std::string& Serialize(std::string &o) const {
             SObject::Serialize(o) << lf.height << lf.width
               << lf.escapement << lf.orientation << lf.weight
@@ -969,24 +967,11 @@ namespace EMF {
             return x_SelectObject(brush, out)->m_ObjId;
         }
         unsigned char GetFont(unsigned char face, int size,
-                              const std::string &familyUTF8,
                               const std::string &familyUTF16,
                               double rot,
-                              bool selectFont,
-                              EMF::ofstream &out, SSysFontInfo **fontInf) {
+                              EMF::ofstream &out) {
             SFont *font = new SFont(face, size, familyUTF16, rot);
-            SObject *obj = selectFont ?
-                x_SelectObject(font, out) :
-                x_GetObject(font, out);
-            font = dynamic_cast<SFont*>(obj);
-            if (font->m_SysFontInfo == NULL) {
-                font->m_SysFontInfo = new SSysFontInfo(familyUTF8.c_str(),
-                                                       size, face);
-            }
-            if (fontInf) {
-                *fontInf = font->m_SysFontInfo;
-            }
-            return (selectFont ? obj->m_ObjId : 0);//flag if not selected
+            return x_SelectObject(font, out)->m_ObjId;
         }
     private:
         SObject* x_GetObject(SObject *obj, EMF::ofstream &out) {

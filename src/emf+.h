@@ -60,6 +60,7 @@ namespace EMFPLUS {
         eRcdSetWorldTransform = 0x402A,
         eRcdResetWorldTransform = 0x402B,
         eRcdMultiplyWorldTransform = 0x402C,
+        eRcdTranslateWorldTransform = 0x402D,
         eRcdSetPageTransform = 0x4030,
         eRcdSetClipRect = 0x4032
     };
@@ -177,6 +178,12 @@ namespace EMFPLUS {
         eWrapModeClamp = 4
     };
 
+    enum EPathPointType {
+        ePathPointTypeStart = 0,
+        ePathPointTypeLine = 1,
+        ePathPointTypeBezier = 3
+    };
+
     // ------------------------------------------------------------------------
     // EMF Objects used repeatedly
     const TUInt4 kVersion = 0xDBC01002; //specifies EMF+ and GDI+ version 1.1
@@ -185,6 +192,7 @@ namespace EMFPLUS {
     struct SPointF {
         double x, y;
         SPointF(void) { x = y = 0; }
+        SPointF(double xx, double yy) : x(xx), y(yy) {}
         friend std::string& operator<< (std::string &o, const SPointF &d) {
             return o << TFloat4(d.x) << TFloat4(d.y);
         }
@@ -373,6 +381,17 @@ namespace EMFPLUS {
         }
     };
 
+    struct STranslateWorldTransform : SRecord {
+        TFloat4 m_d[2];
+        STranslateWorldTransform(double dx, double dy) :
+            SRecord(eRcdTranslateWorldTransform) {
+            m_d[0] = dx; m_d[1] = dy;
+        }
+        std::string& Serialize(std::string &o) const {
+            return SRecord::Serialize(o) << m_d[0] << m_d[1];
+        }
+    };
+
     struct SSetPageTransform : SRecord {
         TFloat4 m_Scale;
         SSetPageTransform(EUnitType u, double s) :
@@ -497,19 +516,17 @@ namespace EMFPLUS {
     };
 
     struct SFont : SObject {
-        SSysFontInfo *m_SysFontInfo;
         double m_emSize;
         unsigned int m_Style;
         std::string m_FamilyUTF16; //UTF-16 characters
         SFont(unsigned char face, double size, const std::string &familyUTF16) :
-            SObject(eTypeFont), m_SysFontInfo(NULL) {
+            SObject(eTypeFont) {
             m_Style =
                 ((face == 2  ||  face == 4) ? eFontBold : 0) |
                 ((face == 3  ||  face == 4) ? eFontItalic : 0);
             m_emSize = size;
             m_FamilyUTF16 = familyUTF16;
         }
-        ~SFont(void) { delete m_SysFontInfo; }
         std::string& Serialize(std::string &o) const {
             SObject::Serialize(o);
             o << kVersion << TFloat4(m_emSize) << TUInt4(eUnitWorld)
@@ -547,45 +564,128 @@ namespace EMFPLUS {
     };
 
     struct SPath : SObject {
-        unsigned int m_NPoly;
-        SPointF *m_Points;
-        unsigned int *m_NPointsPerPoly;
+        std::vector<SPointF> m_Points;
+        std::vector<EPathPointType> m_PtType;
+        std::vector<unsigned int> m_NPointsPerPoly;
         unsigned int m_TotalPts;
-
+        
+        SPath(void) : SObject(eTypePath) {
+            m_TotalPts = 0;
+        }
         SPath(unsigned int nPoly, double *x, double *y, int *nPts) :
-        SObject(eTypePath), m_Points(NULL) {
-            m_NPoly = nPoly;
-            m_NPointsPerPoly = new unsigned int[m_NPoly];
+        SObject(eTypePath) {
+            m_NPointsPerPoly.reserve(nPoly);
             m_TotalPts = 0;
             for (unsigned int i = 0;  i < nPoly;  ++i) {
-                m_NPointsPerPoly[i] = nPts[i];
+                m_NPointsPerPoly.push_back(nPts[i]);
                 m_TotalPts += nPts[i];
             }
-            m_Points = new SPointF[m_TotalPts];
+            m_Points.resize(m_TotalPts);
             for (unsigned int i = 0;  i < m_TotalPts;  ++i) {
                 m_Points[i].x = x[i];
                 m_Points[i].y = y[i];
             }
+            m_PtType.resize(m_TotalPts, ePathPointTypeLine);
+            unsigned int ptI = 0;
+            for (unsigned int i = 0;  i < m_NPointsPerPoly.size();  ++i) {
+                m_PtType[ptI] = ePathPointTypeStart;
+                ptI += m_NPointsPerPoly[i];
+            }
         }
-        ~SPath(void) { delete[] m_Points; delete[] m_NPointsPerPoly;}
+        void StartNewPoly(double x, double y) {
+            m_NPointsPerPoly.push_back(1);
+            ++m_TotalPts;
+            m_Points.push_back(SPointF(x, y));
+            m_PtType.push_back(ePathPointTypeStart);
+        }
+        void AddLineTo(double x, double y) {
+            if (m_NPointsPerPoly.empty()) {
+                throw std::logic_error("logic error in addlineto");
+            }
+            ++m_NPointsPerPoly.back();
+            ++m_TotalPts;
+            m_Points.push_back(SPointF(x, y));
+            m_PtType.push_back(ePathPointTypeLine);
+        }
+        void AddCubicBezierTo(double cx0, double cy0,
+                              double cx1, double cy1,
+                              double x, double y) {
+            if (m_NPointsPerPoly.empty()) {
+                throw std::logic_error("logic error in addcubicbezierto");
+            }
+            m_NPointsPerPoly.back() += 3;
+            m_TotalPts += 3;
+            m_Points.push_back(SPointF(cx0, cy0));
+            m_PtType.push_back(ePathPointTypeBezier);
+            m_Points.push_back(SPointF(cx1, cy1));
+            m_PtType.push_back(ePathPointTypeBezier);
+            m_Points.push_back(SPointF(x, y));
+            m_PtType.push_back(ePathPointTypeBezier);
+        }
+        void AddQuadBezierTo(double cx, double cy,
+                             double x, double y) {
+            if (m_Points.empty()) {
+                throw std::logic_error("logic error in quadbezierto");
+            }
+            double x0 = m_Points.back().x;
+            double y0 = m_Points.back().y;
+            AddCubicBezierTo(x0 + (2./3)*(cx-x0), y0 + (2./3)*(cy-y0),
+                             x + (2./3)*(cx-x), y + (2./3)*(cy-y),
+                             x, y);
+        }
+        void CloseCurrPoly(void) {
+            if (!m_NPointsPerPoly.empty()  &&  m_NPointsPerPoly.back() > 0) {
+                unsigned int startI = m_Points.size()-m_NPointsPerPoly.back();
+                if (!(m_Points.back().x == m_Points[startI].x  &&
+                      m_Points.back().y == m_Points[startI].y)) {
+                    AddLineTo(m_Points[startI].x, m_Points[startI].y);
+                }
+            }
+        }
         std::string& Serialize(std::string &o) const {
             SObject::Serialize(o);
             o << kVersion << TUInt4(m_TotalPts) << TUInt4(0);
             for (unsigned int i = 0;  i < m_TotalPts;  ++i) {
                 o << m_Points[i];
             }
-            for (unsigned int i = 0;  i < m_NPoly;  ++i) {
+            unsigned int polyStart = 0;
+            for (unsigned int i = 0;  i < m_NPointsPerPoly.size();  ++i) {
                 for (unsigned int j = 0;  j < m_NPointsPerPoly[i];  ++j) {
-                    if (j == 0) {
-                        o << TUInt1((0x2 << 4) | 0x0); //position / start
-                    } else if (j < m_NPointsPerPoly[i] - 1) {
-                        o << TUInt1((0x2 << 4) | 0x1); //position / line
-                    } else {
-                        o << TUInt1((0x8 << 4) | 0x1); //close path / line
+                    if (j < m_NPointsPerPoly[i] - 1) { //normal point
+                        o << TUInt1((0x2 << 4) | m_PtType[j+polyStart]);
+                    } else {//close path
+                        o << TUInt1((0x8 << 4) | m_PtType[j+polyStart]); 
                     }
                 }
+                polyStart += m_NPointsPerPoly[i];
             }
             return o;
+        }
+        friend bool operator< (const SPath& p1, const SPath& p2) {
+            if (p1.m_TotalPts < p2.m_TotalPts) {
+                return true;
+            } else if (p1.m_TotalPts > p2.m_TotalPts) {
+                return false;
+            }
+            int cmp = memcmp(p1.m_Points.data(),  p2.m_Points.data(),
+                             sizeof(SPointF)*p1.m_TotalPts);
+            if (cmp < 0) {
+                return true;
+            } else if (cmp > 0) {
+                return false;
+            }
+            cmp = memcmp(p1.m_PtType.data(),  p2.m_PtType.data(),
+                         sizeof(EPathPointType)*p1.m_TotalPts);
+            if (cmp < 0) {
+                return true;
+            } else if (cmp > 0) {
+                return false;
+            }
+            
+            return (memcmp(p1.m_NPointsPerPoly.data(),
+                           p2.m_NPointsPerPoly.data(),
+                           sizeof(unsigned int)*p1.m_NPointsPerPoly.size())
+                    < 0);
         }
     };
              
@@ -681,13 +781,27 @@ namespace EMFPLUS {
 
     struct SFillPath : SRecord {
         TUInt4 m_BrushId;
+        SColorRef m_Col;
+        bool m_SimpleBrush;
+        SFillPath(unsigned char pathId,
+                  unsigned char r, unsigned char g, unsigned char b,
+                  unsigned char a) : SRecord(eRcdFillPath) {
+            iFlags = 1 << 15 | pathId;
+            m_Col.Set(r,g,b,a);
+            m_SimpleBrush = true;
+        }
         SFillPath(unsigned char pathId,
                   unsigned char brushId) : SRecord(eRcdFillPath) {
             iFlags = pathId;
             m_BrushId = brushId;
+            m_SimpleBrush = false;
         }
         std::string& Serialize(std::string &o) const {
-            return SRecord::Serialize(o) << m_BrushId;
+            if (m_SimpleBrush) {
+                return SRecord::Serialize(o) << m_Col;
+            } else {
+                return SRecord::Serialize(o) << m_BrushId;
+            }
 	}
     };
 
@@ -853,12 +967,8 @@ namespace EMFPLUS {
                          s1->m_Vert < s2->m_Vert);
                 }
                 case eTypePath: {
-                    const SPath* p1 = dynamic_cast<const SPath*>(o1);
-                    const SPath* p2 = dynamic_cast<const SPath*>(o2);
-                    return (p1->m_TotalPts < p2->m_TotalPts  ||
-                            (p1->m_TotalPts == p2->m_TotalPts  &&
-                             memcmp(p1->m_Points, p2->m_Points, sizeof(SPointF)*
-                                    p1->m_TotalPts) < 0));
+                    return *dynamic_cast<const SPath*>(o1) <
+                        *dynamic_cast<const SPath*>(o2);
                 }
                 case eTypeImage: {
                     return false; //assume images are unique
@@ -890,49 +1000,37 @@ namespace EMFPLUS {
                              bool useUserLty, EMF::ofstream &out) {
             SPen *pen = new SPen(col, lwd, lty, lend, ljoin, lmitre, ps2dev,
                                  useUserLty);
-            return x_SelectObject(pen, out);
+            return x_InsertObject(pen, out);
         }
         unsigned char GetBrush(SBrush* brush, EMF::ofstream &out) {
-            return x_SelectObject(brush, out);
+            return x_InsertObject(brush, out);
         }
         unsigned char GetBrush(unsigned int col, EMF::ofstream &out) {
             SBrush *brush = new SBrush(col);
-            return x_SelectObject(brush, out);
+            return x_InsertObject(brush, out);
         }
         unsigned char GetFont(unsigned char face, double size,
-                              const std::string &familyUTF8,
-                              const std::string &familyUTF16, EMF::ofstream &out,
-                              SSysFontInfo **fontInf) {
+                              const std::string &familyUTF16,
+                              EMF::ofstream &out) {
             SFont *font = new SFont(face, size, familyUTF16);
-            unsigned char objId = x_SelectObject(font, out);
-            font = dynamic_cast<SFont*>(m_Table[objId]);
-            if (font->m_SysFontInfo == NULL) {
-                font->m_SysFontInfo = new SSysFontInfo(familyUTF8.c_str(),
-                                                       size, face);
-            }
-            if (fontInf) {
-                *fontInf = font->m_SysFontInfo;
-            }
-            return objId;
+            return x_InsertObject(font, out);
         }
         unsigned char GetStringFormat(EStringAlign h, EStringAlign v,
                                       EMF::ofstream &out) {
             SStringFormat *fmt = new SStringFormat(h, v);
-            return x_SelectObject(fmt, out);
+            return x_InsertObject(fmt, out);
         }
-        unsigned char GetPath(unsigned int nPoly, double *x, double *y,
-                              int *nPts, EMF::ofstream &out) {
-            SPath *path = new SPath(nPoly, x, y, nPts);
-            return x_SelectObject(path, out);
+        unsigned char GetPath(SPath* path, EMF::ofstream &out) {
+            return x_InsertObject(path, out);
         }
         unsigned char GetImage(unsigned int *data, int w, int h,
                               EMF::ofstream &out) {
             SImage *image = new SImage(data, w, h);
-            return x_SelectObject(image, out);
+            return x_InsertObject(image, out);
         }
     private:
         //note: takes ownership over pointer!
-        unsigned char x_SelectObject(SObject *obj, EMF::ofstream &out) {
+        unsigned char x_InsertObject(SObject *obj, EMF::ofstream &out) {
             TIndex::iterator i = m_Index.find(obj);
             if (i == m_Index.end()) {
                 m_LastInserted = (m_LastInserted+1) % kMaxObjTableSize;

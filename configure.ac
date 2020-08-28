@@ -37,6 +37,23 @@ else  # if linux/unix (not OSX)
    AC_MSG_NOTICE([XFT_LIBS=${XFT_LIBS}])
 
 
+   if test "xx$FREETYPE_LIBS" == "xx"; then
+      if test "xx$PKGCONF" != "xx"; then
+         AC_MSG_CHECKING([whether pkg-config knows about freetype2])
+         if "${PKGCONF}" --exists freetype2; then
+            AC_MSG_RESULT([yes])
+            FREETYPE_CFLAGS=`"${PKGCONF}" --cflags freetype2`
+            FREETYPE_LIBS=`"${PKGCONF}" --libs freetype2`
+         else
+            AC_MSG_RESULT([no])
+         fi
+      fi
+   fi
+
+   AC_MSG_NOTICE([FREETYPE_CFLAGS=${FREETYPE_CFLAGS}])
+   AC_MSG_NOTICE([FREETYPE_LIBS=${FREETYPE_LIBS}])
+
+
    if test "xx$Z_LIBS" == "xx"; then
       if test "xx$PKGCONF" != "xx"; then
          AC_MSG_CHECKING([whether pkg-config knows about zlib])
@@ -51,10 +68,11 @@ else  # if linux/unix (not OSX)
    fi
 
 
-   CPPFLAGS="${XFT_CFLAGS} ${ZLIB_CFLAGS}"
-   LIBS="${XFT_LIBS} ${ZLIB_LIBS}"
+   CPPFLAGS="${XFT_CFLAGS} ${FREETYPE_CFLAGS} ${ZLIB_CFLAGS}"
+   LIBS="${XFT_LIBS} ${FREETYPE_LIBS} ${ZLIB_LIBS}"
 
    AC_CHECK_HEADERS_ONCE(X11/Xft/Xft.h)
+   AC_CHECK_HEADERS_ONCE(ft2build.h)
    AC_CHECK_HEADERS_ONCE(zlib.h)
 
    if (test "x$ac_cv_header_zlib_h" == xyes); then
@@ -62,6 +80,9 @@ else  # if linux/unix (not OSX)
    fi
    if (test "x$ac_cv_header_X11_Xft_Xft_h" == xyes); then
       CPPFLAGS="${CPPFLAGS} -DHAVE_XFT"
+   fi
+   if (test "x$ac_cv_header_ft2build_h" == xyes); then
+      CPPFLAGS="${CPPFLAGS} -DHAVE_FREETYPE"
    fi
 
    if test "x$ac_cv_header_zlib_h" == xno  &&  test "x$ac_cv_header_X11_Xft_Xft_h" == xno; then
