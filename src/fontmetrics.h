@@ -303,6 +303,8 @@ struct SSysFontInfo {
 #ifdef HAVE_XFT
         if (m_FontInfo) {
             return XftCharExists(s_XDisplay, m_FontInfo, c);
+        } else {
+            return false;
         }
 #endif
 #ifdef HAVE_ZLIB
@@ -378,7 +380,7 @@ struct SSysFontInfo {
         return;
 #endif
 #endif
-        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType (probably you need to install a linux system level-package called 'libfreetype-dev' and then reinstall the devEMF package).");
+        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install linux system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
     }
 
     // actual advance (accounting for kerning!)
@@ -401,7 +403,7 @@ struct SSysFontInfo {
         return (face->glyph->advance.x>>6) + (kerning.x>>6);
 #endif
 #endif
-        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType (probably you need to install a linux system level-package called 'libfreetype-dev' and then reinstall the devEMF package).");
+        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install linux system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
     }
     
     void GetMetrics(unsigned int c, 

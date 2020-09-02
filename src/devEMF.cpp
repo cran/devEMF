@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 359 2020-06-29 21:06:02Z pjohnson $
+/* $Id: devEMF.cpp 360 2020-08-28 19:55:35Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).

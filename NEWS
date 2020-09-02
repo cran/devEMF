@@ -1,3 +1,7 @@
+v4.0-1 -- 1 Sept 2020
+  -fix configure script to handle case where Xft (or FreeType or Zlib)
+   is available but not covered by pkg-config.
+
 v4.0 -- 28 Aug 2020
   -new option emfPlusFontToPath that converts characters to EMF+
    graphics paths and thus makes graphics files portable (otherwise

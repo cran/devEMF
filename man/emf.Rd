@@ -60,8 +60,8 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   graphics paths and makes the resulting EMF+ files truly portable
   (although text strings will no longer be editable by downstream
   programs).  This option is currently only implemented for Linux (with
-  FreeType installed) and Windows.  Contact the author if you need Apple
-  support.
+  FreeType and Xft installed) and Windows.  Contact the author if you'd
+  like to request implementation on Apple.
 
   EMF/EMF+ supports Unicode characters, and this package tries to
   maintain that support as well.  However, font metric information is

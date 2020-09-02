@@ -1,4 +1,4 @@
-/* $Id: emf.h 349 2019-06-24 17:55:13Z pjohnson $
+/* $Id: emf.h 360 2020-08-28 19:55:35Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).

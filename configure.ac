@@ -27,14 +27,13 @@ else  # if linux/unix (not OSX)
             AC_MSG_RESULT([yes])
             XFT_CFLAGS=`"${PKGCONF}" --cflags xft`
             XFT_LIBS=`"${PKGCONF}" --libs xft`
+            AC_MSG_NOTICE([XFT_CFLAGS=${XFT_CFLAGS}])
+            AC_MSG_NOTICE([XFT_LIBS=${XFT_LIBS}])
          else
             AC_MSG_RESULT([no])
          fi
       fi
    fi
-
-   AC_MSG_NOTICE([XFT_CFLAGS=${XFT_CFLAGS}])
-   AC_MSG_NOTICE([XFT_LIBS=${XFT_LIBS}])
 
 
    if test "xx$FREETYPE_LIBS" == "xx"; then
@@ -44,14 +43,13 @@ else  # if linux/unix (not OSX)
             AC_MSG_RESULT([yes])
             FREETYPE_CFLAGS=`"${PKGCONF}" --cflags freetype2`
             FREETYPE_LIBS=`"${PKGCONF}" --libs freetype2`
+            AC_MSG_NOTICE([FREETYPE_CFLAGS=${FREETYPE_CFLAGS}])
+            AC_MSG_NOTICE([FREETYPE_LIBS=${FREETYPE_LIBS}])
          else
             AC_MSG_RESULT([no])
          fi
       fi
    fi
-
-   AC_MSG_NOTICE([FREETYPE_CFLAGS=${FREETYPE_CFLAGS}])
-   AC_MSG_NOTICE([FREETYPE_LIBS=${FREETYPE_LIBS}])
 
 
    if test "xx$Z_LIBS" == "xx"; then
@@ -61,6 +59,8 @@ else  # if linux/unix (not OSX)
             AC_MSG_RESULT([yes])
             ZLIB_CFLAGS=`"${PKGCONF}" --cflags zlib`
             ZLIB_LIBS=`"${PKGCONF}" --libs zlib`
+            AC_MSG_NOTICE([ZLIB_CFLAGS=${ZLIB_CFLAGS}])
+            AC_MSG_NOTICE([ZLIB_LIBS=${ZLIB_LIBS}])
          else
             AC_MSG_RESULT([no])
          fi
@@ -71,21 +71,26 @@ else  # if linux/unix (not OSX)
    CPPFLAGS="${XFT_CFLAGS} ${FREETYPE_CFLAGS} ${ZLIB_CFLAGS}"
    LIBS="${XFT_LIBS} ${FREETYPE_LIBS} ${ZLIB_LIBS}"
 
-   AC_CHECK_HEADERS_ONCE(X11/Xft/Xft.h)
-   AC_CHECK_HEADERS_ONCE(ft2build.h)
    AC_CHECK_HEADERS_ONCE(zlib.h)
+   AC_CHECK_HEADERS_ONCE(ft2build.h)
+   AC_CHECK_HEADERS_ONCE(X11/Xft/Xft.h)
 
+   GOTZ=0
+   GOTX=0
    if (test "x$ac_cv_header_zlib_h" == xyes); then
-      CPPFLAGS="${CPPFLAGS} -DHAVE_ZLIB"
-   fi
-   if (test "x$ac_cv_header_X11_Xft_Xft_h" == xyes); then
-      CPPFLAGS="${CPPFLAGS} -DHAVE_XFT"
+      AC_SEARCH_LIBS(gzopen, z,
+                     [CPPFLAGS="${CPPFLAGS} -DHAVE_ZLIB"; GOTZ=1])
    fi
    if (test "x$ac_cv_header_ft2build_h" == xyes); then
-      CPPFLAGS="${CPPFLAGS} -DHAVE_FREETYPE"
+      AC_SEARCH_LIBS(XftCharExists, Xft,
+                     [CPPFLAGS="${CPPFLAGS} -DHAVE_FREETYPE"])
+   fi
+   if (test "x$ac_cv_header_X11_Xft_Xft_h" == xyes); then
+      AC_SEARCH_LIBS(FT_Get_Char_Index, freetype,
+                     [CPPFLAGS="${CPPFLAGS} -DHAVE_XFT"; GOTX=1])
    fi
 
-   if test "x$ac_cv_header_zlib_h" == xno  &&  test "x$ac_cv_header_X11_Xft_Xft_h" == xno; then
+   if test ${GOTZ} = 0  &&  test ${GOTX} = 0; then
       AC_MSG_ERROR([Cannot find Xft.h or zlib.h! Please install the Xft or Zlib development headers and/or set XFT_CFLAGS/LIBS or ZLIB_CFLAGS/LIBS correspondingly.])
    fi
 
