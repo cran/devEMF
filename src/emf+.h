@@ -742,16 +742,31 @@ namespace EMFPLUS {
     };
 
     struct SFillEllipse : SRecord {
-        SColorRef m_Brush;
+        TUInt4 m_BrushId;
+        SColorRef m_Col;
+        bool m_SimpleBrush;
         SRectF rect;
         SFillEllipse(double x, double y, double w, double h,
-                     unsigned int col) :
-            SRecord(eRcdFillEllipse), m_Brush(col) {
+                  unsigned char r, unsigned char g, unsigned char b,
+                  unsigned char a) : SRecord(eRcdFillEllipse) {
             iFlags = 1 << 15; //specify solid brush, color given here
             rect.x = x; rect.y = y; rect.w = w; rect.h = h;
+            m_Col.Set(r,g,b,a);
+            m_SimpleBrush = true;
+        }
+        SFillEllipse(double x, double y, double w, double h,
+                     unsigned char brushId) : SRecord(eRcdFillEllipse) {
+            iFlags = 0;
+            rect.x = x; rect.y = y; rect.w = w; rect.h = h;
+            m_BrushId = brushId;
+            m_SimpleBrush = false;
         }
         std::string& Serialize(std::string &o) const {
-            return SRecord::Serialize(o) << m_Brush << rect;
+            if (m_SimpleBrush) {
+                return SRecord::Serialize(o) << m_Col << rect;
+            } else {
+                return SRecord::Serialize(o) << m_BrushId << rect;
+            }
 	}
     };
 

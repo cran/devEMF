@@ -1,3 +1,7 @@
+v4.0-2 -- 30 Sept 2020
+  -add missing preprocessor conditional
+  -enable linear gradient fill for circles
+
 v4.0-1 -- 1 Sept 2020
   -fix configure script to handle case where Xft (or FreeType or Zlib)
    is available but not covered by pkg-config.

@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 360 2020-08-28 19:55:35Z pjohnson $
+/* $Id: devEMF.cpp 362 2020-10-01 04:06:11Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -137,11 +137,15 @@ private:
     }
     int x_GetBrush(const pGEcontext gc) {
         bool hasFill = !R_TRANSPARENT(gc->fill);
+        if (!m_UseEMFPlus) {
+            return (hasFill ?
+                    m_ObjectTableEMF.GetBrush(gc->fill, m_File) : -1);
+        }
 #if R_GE_version >= 13
         hasFill = hasFill  ||  (gc->patternFill != R_NilValue);
 #endif
-        if (!m_UseEMFPlus  ||  !hasFill) {
-            return -1; //only implemented for EMF+
+        if (!hasFill) { // no brush needed!
+            return -1;
         }
         if (!R_TRANSPARENT(gc->fill)) {
             return m_ObjectTable.GetBrush(new EMFPLUS::SBrush(gc->fill),m_File);
@@ -360,7 +364,7 @@ namespace EMFcb {
 void CDevEMF::MetricInfo(int c, const pGEcontext gc, double* ascent,
                      double* descent, double* width)
 {
-    if (m_debug) Rprintf("metricinfo: %c %i %x (face %i)\n",c,c,abs(c),gc->fontface);
+    if (m_debug) Rprintf("metricinfo: %c %i %x (face %i, pts %f)\n",c,c,abs(c),gc->fontface, x_EffPointsize(gc));
     //cout << gc->fontfamily << "/" << gc->fontface << " -- " << c << " / " << (char) c;
     if (c < 0) { c = -c; }
 
@@ -693,13 +697,14 @@ void CDevEMF::Circle(double x, double y, double r, const pGEcontext gc)
             EMFPLUS::SDrawEllipse circle(x-r, y-r, 2*r, 2*r, x_GetPen(gc));
             circle.Write(m_File);
         }
-        if (!R_TRANSPARENT(gc->fill)) {
-            EMFPLUS::SFillEllipse circle(x-r, y-r, 2*r, 2*r, gc->fill);
+        int brushId = x_GetBrush(gc);
+        if (brushId >= 0) {//not transparent
+            EMFPLUS::SFillEllipse circle(x-r, y-r, 2*r, 2*r, brushId);
             circle.Write(m_File);
         }
     } else {
         x_GetPen(gc);
-        m_ObjectTableEMF.GetBrush(gc->fill, m_File);
+        x_GetBrush(gc);
         EMF::S_ELLIPSE emr;
         emr.box.Set(floor(x-r + 0.5), floor(y-r + 0.5),
                     floor(x+r + 0.5), floor(y+r + 0.5));
@@ -725,7 +730,7 @@ void CDevEMF::Polygon(int n, double *x, double *y, const pGEcontext gc)
         }
     } else {
         x_GetPen(gc);
-        m_ObjectTableEMF.GetBrush(gc->fill, m_File);
+        x_GetBrush(gc);
         EMF::SPoly polygon(EMF::eEMR_POLYGON, n, x, y);
         polygon.Write(m_File);
     }

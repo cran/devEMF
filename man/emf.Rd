@@ -25,8 +25,9 @@ emf(file = "Rplot.emf", width = 7, height = 7,
     color is painted.}
   \item{fg}{initial foreground color to be used.}
   \item{pointsize}{default font point size to be used.}
-  \item{family}{default font family to be used (note fonts cannot be
-  embedded in EMF/EMF+ files, use non-standard fonts with caution).}
+  \item{family}{default font family to be used (if you use non-standard
+  fonts, consider setting emfPlusFontToPath=TRUE to ensure text looks
+  correct on the viewing system).}
   \item{coordDPI}{DPI used for coordinate system (while EMF is a vector
     format, it (and R) use discrete coordinate systems).}
   \item{custom.lty}{logical: if false, approximate R line types with EMF

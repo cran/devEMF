@@ -312,6 +312,7 @@ struct SSysFontInfo {
 #endif
     }
     
+#ifdef HAVE_FREETYPE
     struct SPathOutlineFuncs : public FT_Outline_Funcs {
         SPathOutlineFuncs(void) {
             move_to = (FT_Outline_MoveToFunc) MoveTo;
@@ -352,6 +353,7 @@ struct SSysFontInfo {
             return 0;
         }
     };
+#endif
 
     void AppendGlyphPath(unsigned int c, EMFPLUS::SPath &path) const {
 #ifdef HAVE_FREETYPE
