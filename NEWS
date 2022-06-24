@@ -1,3 +1,15 @@
+v4.1 -- 12 May 2022
+  -if making an EMF+ file but have the possibility of using any EMF
+   drawing records (i.e., unless emfPlusFont=TRUE and
+   emfPlusRaster=TRUE), use EMF clipping in addition to EMF+ clipping.
+   Previously, if the file was EMF+, only did EMF+ clipping.  The old
+   strategy worked with some viewing programs but not all.
+  -tweak missing font metric warning message under Linux to remind
+   user that they might want to install Xft
+  -added "units" argument to emf() function to allow specification of
+   device width & height in SI units (thanks to Mauricio Vargas for
+   suggesting)
+
 v4.0-2 -- 30 Sept 2020
   -add missing preprocessor conditional
   -enable linear gradient fill for circles

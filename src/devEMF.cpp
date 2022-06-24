@@ -1,4 +1,4 @@
-/* $Id: devEMF.cpp 362 2020-10-01 04:06:11Z pjohnson $
+/* $Id: devEMF.cpp 363 2022-06-23 15:04:46Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -547,7 +547,9 @@ void CDevEMF::Clip(double x0, double x1, double y0, double y1)
     if (m_UseEMFPlus) {
         EMFPLUS::SSetClipRect clip(EMFPLUS::eCombineModeReplace, x0,y0,x1,y1);
         clip.Write(m_File);
-    } else {
+    }
+    //also do EMF clipping if possibly using any EMF records
+    if (!m_UseEMFPlus  ||  !m_UseEMFPlusFont  ||  !m_UseEMFPlusRaster)  {
         EMF::S_EXTSELECTCLIPRGN rgn;//reset to default
         rgn.Write(m_File);
         EMF::S_INTERSECTCLIPRECT rect(x0,y0,x1,y1);

@@ -224,8 +224,14 @@ struct SSysFontInfo {
 #ifdef HAVE_ZLIB
         if (afmPathDB.find(m_Spec.m_Family) == afmPathDB.end()  ||
             afmPathDB[m_Spec.m_Family].size() < m_Spec.m_Face) {
+#ifdef HAVE_XFT
             Rf_warning("Font metric information not found for family '%s'; "
                        "using 'Helvetica' instead", m_Spec.m_Family.c_str());
+#else
+            Rf_warning("Font metric information not available for family '%s'; "
+                       "using 'Helvetica' instead (consider installing Xft through a system level-package called 'libxft-dev' or similar and then reinstall the devEMF package).", m_Spec.m_Family.c_str());
+#endif
+
             //last-ditch substitute with "Helvetica"
             LoadAFM((packagePath+"/afm/" +
                      afmPathDB["Helvetica"][m_Spec.m_Face-1] + ".gz").
@@ -382,7 +388,7 @@ struct SSysFontInfo {
         return;
 #endif
 #endif
-        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install linux system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
+        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
     }
 
     // actual advance (accounting for kerning!)
@@ -405,7 +411,7 @@ struct SSysFontInfo {
         return (face->glyph->advance.x>>6) + (kerning.x>>6);
 #endif
 #endif
-        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install linux system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
+        Rf_error("devEMF: Font to path conversion requires devEMF to be compiled with FreeType and Xft (probably you need to first install system level-packages called 'libfreetype-dev' and 'libxft-dev' and then reinstall the devEMF package).");
     }
     
     void GetMetrics(unsigned int c, 

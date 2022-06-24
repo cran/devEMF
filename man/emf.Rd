@@ -10,7 +10,7 @@
 }
 \usage{
 
-emf(file = "Rplot.emf", width = 7, height = 7,
+emf(file = "Rplot.emf", width = 7, height = 7, units = c("in", "cm", "mm"),
     bg = "transparent", fg = "black", pointsize = 12,
     family = "Helvetica", coordDPI = 300, custom.lty=emfPlus,
     emfPlus=TRUE, emfPlusFont = FALSE, emfPlusRaster = FALSE,
@@ -19,9 +19,11 @@ emf(file = "Rplot.emf", width = 7, height = 7,
 
 \arguments{
   \item{file}{character string giving the name of file.}
-  \item{width}{width of plot in inches.}
-  \item{height}{height of plot in inches.}
-  \item{bg}{plot background color.  If \code{"transparent"}, no background
+  \item{width}{width of plot.}
+  \item{height}{height of plot.}
+  \item{units}{units in which \code{width} and \code{height} are
+  given.  Must be one of \code{in} (inches, default), \code{cm}, or \code{mm}.}
+  \item{bg}{plot background color.  If \code{transparent}, no background
     color is painted.}
   \item{fg}{initial foreground color to be used.}
   \item{pointsize}{default font point size to be used.}
@@ -53,7 +55,7 @@ emf(file = "Rplot.emf", width = 7, height = 7,
   create multiple pages will result in a warning message and the output
   file will contain the different pages superimposed.
   
-  Also, note EMF/EMF does not support font embedding, so with the
+  Also, note EMF/EMF+ does not support font embedding, so with the
   default options, any fonts used must be present both on the system
   that you use when you create the graphics file (i.e., when you run R)
   and on the system that you use to import/view the file.  HOWEVER, the
