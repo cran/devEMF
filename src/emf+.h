@@ -406,10 +406,10 @@ namespace EMFPLUS {
         SSetClipRect(ECombineMode cm,
                      double x0, double y0, double x1, double y1) :
         SRecord(eRcdSetClipRect) { iFlags = cm << 8;
-                m_Rect.x = x0;
-                m_Rect.y = y0;
-                m_Rect.w = x1-x0;
-                m_Rect.h = y1-y0;}
+            m_Rect.x = std::min(x0, x1);
+            m_Rect.y = std::min(y0, y1);
+            m_Rect.w = abs(x1-x0);
+            m_Rect.h = abs(y1-y0);}
         std::string& Serialize(std::string &o) const {
             return SRecord::Serialize(o) << m_Rect;
         }

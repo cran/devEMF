@@ -1,3 +1,12 @@
+v4.1-1 -- 30 Oct 2022
+  -clipping rectangles (both EMF and EMF+) were previously being
+   defined starting from the lower-left corner.  However, the EMF/EMF+
+   spec says rectangles should be defined from the upper-left corner.
+   Most viewing programs handled either way; however, when Word
+   exports to PDF, it requires the definition to match the
+   specification.  Fixed now, along with a couple other places
+   rectangles were used.  (Thanks to Arnaud Atoch for reporting.)
+
 v4.1 -- 12 May 2022
   -if making an EMF+ file but have the possibility of using any EMF
    drawing records (i.e., unless emfPlusFont=TRUE and

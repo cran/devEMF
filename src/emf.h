@@ -1,4 +1,4 @@
-/* $Id: emf.h 360 2020-08-28 19:55:35Z pjohnson $
+/* $Id: emf.h 365 2022-11-04 20:22:16Z pjohnson $
     --------------------------------------------------------------------------
     Add-on package to R to produce EMF graphics output (for import as
     a high-quality vector graphic into Microsoft Office or OpenOffice).
@@ -267,7 +267,7 @@ namespace EMF {
     struct SRect {
         int left, top, right, bottom;
         void Set(int l, int t, int r, int b) {
-            left = l; top = t; right = r; bottom = b;
+            left = l; top = std::min(t,b); right = r; bottom = std::max(t,b);
         }
         friend std::string& operator<< (std::string &o, const SRect &d) {
             return o << TInt4(d.left) << TInt4(d.top)
@@ -575,8 +575,8 @@ namespace EMF {
                 points[i].Set((int) floor(x[i] + 0.5), (int) floor(y[i] + 0.5));
                 if (points[i].x < bounds.left)   { bounds.left = points[i].x; }
                 if (points[i].x > bounds.right)  { bounds.right = points[i].x; }
-                if (points[i].y < bounds.bottom) { bounds.bottom = points[i].y;}
-                if (points[i].y > bounds.top)    { bounds.top = points[i].y; }
+                if (points[i].y > bounds.bottom) { bounds.bottom = points[i].y;}
+                if (points[i].y < bounds.top)    { bounds.top = points[i].y; }
             }
         }
         ~SPoly(void) { delete[] points; }
