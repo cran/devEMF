@@ -1,8 +1,8 @@
 Package: devEMF
 Type: Package
 Title: EMF Graphics Output Device
-Version: 4.1-1
-Date: 2022-10-30
+Version: 4.1-2
+Date: 2022-12-14
 Author: Philip Johnson
 Maintainer: Philip Johnson <plfj@umd.edu>
 Depends: R (>= 2.10.1)
@@ -10,7 +10,8 @@ SystemRequirements: FreeType, Xft, or zlib (only needed for platforms
         other than OSX and Windows)
 Description: Output graphics to EMF+/EMF.
 License: GPL-3
+URL: https://github.com/plfjohnson/devEMF
 NeedsCompilation: yes
-Packaged: 2022-11-04 20:22:19 UTC; pjohnson
+Packaged: 2022-12-20 14:53:31 UTC; pjohnson
 Repository: CRAN
-Date/Publication: 2022-11-04 22:00:01 UTC
+Date/Publication: 2022-12-20 16:20:07 UTC
