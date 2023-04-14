@@ -1,10 +1,10 @@
-a581bd9c884186e493224bc63950a8fa *DESCRIPTION
+6a4c70a175da8cc9c8275380ff1e4ee3 *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-79c6e486de46e93b3f6b12287c0a36ae *NEWS
+34c6698e156b4d0c783c0de3e7aa1e7a *NEWS
 2457ccfbc123dc67b784f477bfc38652 *R/emf.R
 c3cded853a2388ad53569a7105d1c1e3 *cleanup
-f0f72919faf09fae5177db0d203e6d78 *configure
-d04401447022c2a1f6545ac5f074efa6 *configure.ac
+8eb9dcd9dec3d7962c01895cec028227 *configure
+808af3a0df4b98d7660a698a66325484 *configure.ac
 d41d8cd98f00b204e9800998ecf8427e *configure.win
 5a270f26831f5aec6b11cf364f2fb847 *inst/afm/Courier-Bold-ucs.afm.gz
 898a49661ffa8d90bf6cc6468a6b6e10 *inst/afm/Courier-BoldOblique-ucs.afm.gz
