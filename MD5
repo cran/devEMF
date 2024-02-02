@@ -1,6 +1,6 @@
-eaad1935b99b3f474b51358e5306b1d7 *DESCRIPTION
+30aea9dd1e2f39221e9e4b00786a73f9 *DESCRIPTION
 5b4e32919d3f26ef78fa00ae2deaaf62 *NAMESPACE
-ccac608bf9051fe7acf72b629ef8326a *NEWS
+2e7be4ec03b52dfbbdf18ab00e1fc182 *NEWS
 9a19ea28b89041f53cfc240bf3882f31 *R/emf.R
 c3cded853a2388ad53569a7105d1c1e3 *cleanup
 75f8f46a605ad0530127dc330c1d4fad *configure
@@ -25,7 +25,7 @@ f57c9be7d2e5fc17a263cb40b05fd793 *inst/afm/Times-Roman-ucs.afm.gz
 b2bba8a3feef00e65a18d7d3ee400bff *man/emf.Rd
 d62c4825a3abc101a04429d20703158d *src/Makevars.in
 b1c26a7aa76749fac4bd50d05b2184cd *src/Makevars.win
-53da9e07e7c1f3275b554f351757256f *src/devEMF.cpp
+78aa2f667415c99094e8a14a5a6358af *src/devEMF.cpp
 70e3776f291b4f2df5586d106ca58072 *src/emf+.h
 93de317d2900284fe58b72b42400bf8c *src/emf.h
 66e7b9f3ce1d262a439bc9703771d61b *src/fontmetrics.h
