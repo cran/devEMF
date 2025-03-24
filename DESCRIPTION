@@ -1,10 +1,13 @@
 Package: devEMF
 Type: Package
 Title: EMF Graphics Output Device
-Version: 4.5
-Date: 2024-07-26
-Author: Philip Johnson
-Maintainer: Philip Johnson <plfj@umd.edu>
+Version: 4.5-1
+Date: 2025-03-24
+Authors@R: person(given = "Philip",
+                  family = "Johnson",
+                  role = c("aut", "cre"),
+                  email = "plfj@umd.edu",
+                  comment = c(ORCID = "0000-0001-6087-7064"))
 Depends: R (>= 2.10.1)
 SystemRequirements: fontconfig or zlib (only needed for platforms other
         than modern OSX and Windows)
@@ -13,6 +16,8 @@ License: GPL-3
 URL: https://github.com/plfjohnson/devEMF
 BugReports: https://github.com/plfjohnson/devEMF/issues
 NeedsCompilation: yes
-Packaged: 2024-07-26 15:53:10 UTC; pjohnson
+Packaged: 2025-03-24 15:09:00 UTC; pjohnson
+Author: Philip Johnson [aut, cre] (<https://orcid.org/0000-0001-6087-7064>)
+Maintainer: Philip Johnson <plfj@umd.edu>
 Repository: CRAN
-Date/Publication: 2024-07-26 20:00:01 UTC
+Date/Publication: 2025-03-24 16:20:01 UTC
